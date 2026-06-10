@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -90,30 +91,39 @@ fun MessageBubble(
                 if (message.isStreaming && message.content.isEmpty() && message.imageUrl == null) {
                     TypingIndicator()
                 } else {
-                    Column {
-                        if (message.imageUrl != null || isImageContent(message.content)) {
-                            val imageModel = message.imageUrl ?: message.content
-                            AsyncImage(
-                                model = imageModel,
-                                contentDescription = "图片",
-                                modifier = Modifier
-                                    .sizeIn(maxWidth = 240.dp, maxHeight = 240.dp)
-                                    .clip(AppShapes.md)
-                                    .then(
-                                        if (onImageClick != null) {
-                                            Modifier.clickable { onImageClick(imageModel) }
-                                        } else Modifier
-                                    ),
-                                contentScale = ContentScale.Crop
-                            )
+                    val contentColumn: @Composable () -> Unit = {
+                        Column {
+                            if (message.imageUrl != null || isImageContent(message.content)) {
+                                val imageModel = message.imageUrl ?: message.content
+                                AsyncImage(
+                                    model = imageModel,
+                                    contentDescription = "图片",
+                                    modifier = Modifier
+                                        .sizeIn(maxWidth = 240.dp, maxHeight = 240.dp)
+                                        .clip(AppShapes.md)
+                                        .then(
+                                            if (onImageClick != null) {
+                                                Modifier.clickable { onImageClick(imageModel) }
+                                            } else Modifier
+                                        ),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            if (message.content.isNotBlank() && !isImageContent(message.content)) {
+                                Text(
+                                    text = message.content,
+                                    style = TextStyles.bodyMd,
+                                    color = if (isUser) Color.White else MaterialTheme.colorScheme.onBackground
+                                )
+                            }
                         }
-                        if (message.content.isNotBlank() && !isImageContent(message.content)) {
-                            Text(
-                                text = message.content,
-                                style = TextStyles.bodyMd,
-                                color = if (isUser) Color.White else MaterialTheme.colorScheme.onBackground
-                            )
+                    }
+                    if (!isUser) {
+                        SelectionContainer {
+                            contentColumn()
                         }
+                    } else {
+                        contentColumn()
                     }
                 }
             }
