@@ -34,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -161,6 +162,11 @@ fun ChatScreen(
     )
 
     val title = if (currentSessionId.isEmpty()) "口袋星奈" else currentSessionId.take(8)
+
+    // 拦截系统返回键：抽屉打开时关闭抽屉，否则不返回 connect 界面
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch { drawerState.close() }
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState,

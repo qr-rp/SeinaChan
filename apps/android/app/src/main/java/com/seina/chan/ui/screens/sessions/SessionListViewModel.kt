@@ -12,9 +12,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -27,6 +30,27 @@ class SessionListViewModel @Inject constructor(
 
     private val _sessions = MutableStateFlow<List<Session>>(emptyList())
     val sessions: StateFlow<List<Session>> = _sessions.asStateFlow()
+
+    val searchQuery = MutableStateFlow("")
+
+    val filteredSessions: StateFlow<List<Session>> = combine(
+        _sessions,
+        searchQuery
+    ) { sessions, query ->
+        if (query.isBlank()) {
+            sessions
+        } else {
+            val normalizedQuery = query.trim().lowercase()
+            sessions.filter { session ->
+                session.title?.lowercase()?.contains(normalizedQuery) == true ||
+                session.preview?.lowercase()?.contains(normalizedQuery) == true
+            }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     val connectionState: StateFlow<ConnectionState> = connectionRepository.connectionState
 

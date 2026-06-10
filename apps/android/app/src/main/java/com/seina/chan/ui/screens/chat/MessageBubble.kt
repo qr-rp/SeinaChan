@@ -49,37 +49,44 @@ fun MessageBubble(
     val effectiveShowToolCalls = showToolCalls && !isUser
     val effectiveShowReasoning = showReasoning && !isUser
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Top
     ) {
-        // 思考链面板（仅 assistant 消息显示，位于消息气泡上方）
-        if (effectiveShowReasoning && (message.isReasoning || message.reasoningText.isNotBlank())) {
-            ReasoningPanel(
-                reasoningText = message.reasoningText,
-                isReasoning = message.isReasoning,
-                modifier = Modifier
-                    .padding(bottom = 8.dp)
-                    .padding(start = 44.dp)
+        if (!isUser) {
+            Avatar(
+                text = "★",
+                backgroundColor = MaterialTheme.colorScheme.primary,
+                contentColor = Color.White
             )
+            Spacer(modifier = Modifier.width(8.dp))
         }
 
-        // 消息气泡行（包含 Avatar）
-        Row(
-            horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
-            verticalAlignment = Alignment.Top
+        Column(
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (!isUser) {
-                Avatar(
-                    text = "★",
-                    backgroundColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White
+            // 思考链面板（仅 assistant 消息显示）
+            if (effectiveShowReasoning && (message.isReasoning || message.reasoningText.isNotBlank())) {
+                ReasoningPanel(
+                    reasoningText = message.reasoningText,
+                    isReasoning = message.isReasoning
                 )
-                Spacer(modifier = Modifier.width(8.dp))
             }
 
+            // 工具调用卡片列表（仅 assistant 消息显示）
+            if (effectiveShowToolCalls) {
+                message.toolCalls.forEach { toolCall ->
+                    key(toolCall.id) {
+                        ToolCallCard(toolCall = toolCall)
+                    }
+                }
+            }
+
+            // 消息气泡
             Box(
                 modifier = Modifier
                     .background(
@@ -113,30 +120,16 @@ fun MessageBubble(
                     }
                 }
             }
-
-            if (isUser) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Avatar(
-                    text = "🙂",
-                    backgroundColor = MaterialTheme.colorScheme.background,
-                    contentColor = MaterialTheme.colorScheme.onBackground,
-                    borderColor = MaterialTheme.colorScheme.outline
-                )
-            }
         }
 
-        // 工具调用卡片列表（仅 assistant 消息显示）
-        if (effectiveShowToolCalls) {
-            message.toolCalls.forEach { toolCall ->
-                key(toolCall.id) {
-                    ToolCallCard(
-                        toolCall = toolCall,
-                        modifier = Modifier
-                            .padding(top = 8.dp)
-                            .padding(start = 44.dp)
-                    )
-                }
-            }
+        if (isUser) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Avatar(
+                text = "🙂",
+                backgroundColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.onBackground,
+                borderColor = MaterialTheme.colorScheme.outline
+            )
         }
     }
 }

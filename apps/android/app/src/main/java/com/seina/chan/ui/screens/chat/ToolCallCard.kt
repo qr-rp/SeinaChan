@@ -69,51 +69,27 @@ fun ToolCallCard(
                 // 状态指示器
                 when (toolCall.status) {
                     ToolCallStatus.Running -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "运行中...",
-                                style = TextStyles.caption,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(12.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                strokeWidth = 2.dp
-                            )
-                        }
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(12.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            strokeWidth = 2.dp
+                        )
                     }
 
                     ToolCallStatus.Success -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "完成",
-                                style = TextStyles.caption,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(color = Success, shape = CircleShape)
-                            )
-                        }
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(color = Success, shape = CircleShape)
+                        )
                     }
 
                     ToolCallStatus.Failed -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "失败",
-                                style = TextStyles.caption,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(color = ErrorColor, shape = CircleShape)
-                            )
-                        }
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(color = ErrorColor, shape = CircleShape)
+                        )
                     }
                 }
 
@@ -123,26 +99,6 @@ fun ToolCallCard(
                     contentDescription = if (expanded) "收起" else "展开",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
-                )
-            }
-
-            // 参数摘要（折叠时显示）
-            if (!expanded && toolCall.args.isNotBlank()) {
-                Text(
-                    text = toolCall.summary.ifBlank { toolCall.args.take(100) },
-                    style = TextStyles.caption,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            // 耗时
-            if (toolCall.duration != null) {
-                Text(
-                    text = "耗时: ${toolCall.duration}s",
-                    style = TextStyles.caption,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
 

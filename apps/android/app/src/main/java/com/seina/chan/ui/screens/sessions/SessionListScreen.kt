@@ -57,7 +57,8 @@ fun SessionListScreen(
     onReconfigure: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {}
 ) {
-    val sessions by viewModel.sessions.collectAsStateWithLifecycle()
+    val sessions by viewModel.filteredSessions.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
@@ -144,6 +145,17 @@ fun SessionListScreen(
 
         Spacer(modifier = Modifier.height(Spacing.sm))
 
+        SeinaTextField(
+            value = searchQuery,
+            onValueChange = { viewModel.searchQuery.value = it },
+            placeholder = "搜索会话...",
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.sm)
+        )
+
+        Spacer(modifier = Modifier.height(Spacing.sm))
+
         ConnectionStatusBar(
             status = connectionStatus,
             modifier = Modifier.padding(horizontal = Spacing.sm)
@@ -174,7 +186,11 @@ fun SessionListScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (error != null) "加载失败: $error" else "暂无历史会话",
+                        text = when {
+                            error != null -> "加载失败: $error"
+                            searchQuery.isNotEmpty() -> "未找到匹配会话"
+                            else -> "暂无历史会话"
+                        },
                         style = TextStyles.bodyMd,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -230,7 +246,7 @@ fun SessionListScreen(
                         }
                     }
 
-                    // 底部加载指示器
+                    // 底部加载指示器或加载更多按钮
                     if (isLoadingMore) {
                         item {
                             Box(
@@ -240,6 +256,22 @@ fun SessionListScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    } else if (hasMore) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = Spacing.md),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                SeinaButton(
+                                    text = "加载更多",
+                                    onClick = { viewModel.loadMore() },
+                                    variant = SeinaButtonVariant.Secondary,
+                                    compact = true
+                                )
                             }
                         }
                     }

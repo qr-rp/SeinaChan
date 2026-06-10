@@ -3,6 +3,7 @@ package com.seina.chan.ui.screens.connect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.model.ConnectionConfig
+import com.seina.chan.data.remote.ConnectionState
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -51,6 +52,12 @@ class ConnectViewModel @Inject constructor(
                 val port = config.port.ifBlank { "9119" }
                 _uiState.value = _uiState.value.copy(ip = ip, port = port, token = config.token)
                 FileLogger.i("ConnectViewModel", "init - loaded config ip=$ip, port=$port")
+
+                // 若当前已连接且已有配置，自动跳转到聊天界面
+                if (connectionRepository.connectionState.value is ConnectionState.Open) {
+                    FileLogger.i("ConnectViewModel", "init - already connected, auto-navigate to chat")
+                    _navigateToChat.emit(true)
+                }
             } else {
                 FileLogger.i("ConnectViewModel", "init - no saved config")
             }
@@ -117,6 +124,7 @@ class ConnectViewModel @Inject constructor(
             if (result.isSuccess) {
                 FileLogger.i("ConnectViewModel", "connect() succeeded")
                 connectionRepository.saveConfig(config)
+                _uiState.value = _uiState.value.copy(isLoading = false)
                 _navigateToChat.emit(true)
             } else {
                 val message = result.exceptionOrNull()?.message ?: "连接失败"
