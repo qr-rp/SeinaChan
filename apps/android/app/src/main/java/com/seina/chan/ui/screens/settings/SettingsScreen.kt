@@ -1,7 +1,11 @@
 package com.seina.chan.ui.screens.settings
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -16,6 +20,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -189,6 +197,116 @@ fun SettingsScreen(
                     optionValues = listOf("system", "light", "dark"),
                     onOptionSelected = { viewModel.setThemeMode(it) }
                 )
+            }
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = Spacing.sm),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
+
+            // 连接设置
+            item {
+                Text(
+                    text = "连接设置",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(
+                        start = Spacing.md,
+                        top = Spacing.md,
+                        bottom = Spacing.xs
+                    )
+                )
+            }
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.md)
+                ) {
+                    var ipText by remember { mutableStateOf(uiState.connectionIp) }
+                    var portText by remember { mutableStateOf(uiState.connectionPort) }
+                    var tokenText by remember { mutableStateOf(uiState.connectionToken) }
+
+                    OutlinedTextField(
+                        value = ipText,
+                        onValueChange = { ipText = it },
+                        label = {
+                            Text(
+                                text = "IP 地址",
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    OutlinedTextField(
+                        value = portText,
+                        onValueChange = { portText = it },
+                        label = {
+                            Text(
+                                text = "端口",
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    OutlinedTextField(
+                        value = tokenText,
+                        onValueChange = { tokenText = it },
+                        label = {
+                            Text(
+                                text = "Token",
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                        },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.md))
+                    Button(
+                        onClick = {
+                            viewModel.setConnectionIp(ipText)
+                            viewModel.setConnectionPort(portText)
+                            viewModel.setConnectionToken(tokenText)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text(
+                            text = "保存连接配置",
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    Button(
+                        onClick = { viewModel.disconnect() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text(
+                            text = "断开当前连接",
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
             }
         }
     }

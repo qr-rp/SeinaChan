@@ -150,7 +150,7 @@ private fun ReasoningPanel(
             Text(
                 text = if (isReasoning) "思考中..." else "思考完成",
                 style = TextStyles.label,
-                color = Ink
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.weight(1f))
             if (isReasoning) {
@@ -164,7 +164,7 @@ private fun ReasoningPanel(
             Icon(
                 imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 contentDescription = if (expanded) "收起" else "展开",
-                tint = Ink,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -178,7 +178,7 @@ private fun ReasoningPanel(
                 Text(
                     text = reasoningText,
                     style = TextStyles.bodySm,
-                    color = Ink,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontFamily = FontFamily.Monospace
                 )
             }

@@ -2,12 +2,17 @@ package com.seina.chan.data.repository
 
 import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.data.model.Session
+import com.seina.chan.data.model.ToolCallDetail
+import com.seina.chan.data.model.ToolCallStatus
 import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
@@ -54,15 +59,47 @@ class SessionRepository(
             val content = when (it.content) {
                 is JsonPrimitive -> it.content.content
                 null -> ""
-                else -> it.content.toString()
+                else -> ""
             }
+            val finalContent = if (it.role == "tool") "" else content
             ChatMessage(
                 id = it.id.toString(),
                 role = it.role,
-                content = content,
+                content = finalContent,
                 isStreaming = false,
-                toolCalls = emptyList()
+                toolCalls = parseToolCalls(it.toolCalls)
             )
+        }
+    }
+
+    private fun parseToolCalls(toolCallsElement: JsonElement?): List<ToolCallDetail> {
+        if (toolCallsElement == null) return emptyList()
+        return when (toolCallsElement) {
+            is JsonArray -> toolCallsElement.mapNotNull { parseSingleToolCall(it) }
+            is JsonObject -> listOfNotNull(parseSingleToolCall(toolCallsElement))
+            else -> emptyList()
+        }
+    }
+
+    private fun parseSingleToolCall(element: JsonElement): ToolCallDetail? {
+        return try {
+            val obj = element.jsonObject
+            val id = obj["id"]?.jsonPrimitive?.content ?: ""
+            val name = obj["toolName"]?.jsonPrimitive?.content
+                ?: obj["name"]?.jsonPrimitive?.content ?: ""
+            val args = obj["input"]?.jsonPrimitive?.content
+                ?: obj["args"]?.jsonPrimitive?.content ?: ""
+            val result = obj["output"]?.jsonPrimitive?.content
+                ?: obj["result"]?.jsonPrimitive?.content ?: ""
+            val statusStr = obj["status"]?.jsonPrimitive?.content ?: ""
+            val status = when (statusStr.lowercase()) {
+                "success" -> ToolCallStatus.Success
+                "failed", "error" -> ToolCallStatus.Failed
+                else -> ToolCallStatus.Running
+            }
+            ToolCallDetail(id = id, name = name, args = args, result = result, status = status)
+        } catch (e: Exception) {
+            null
         }
     }
 

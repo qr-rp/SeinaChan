@@ -2,6 +2,7 @@ package com.seina.chan.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,12 +18,16 @@ data class SettingsUiState(
     val themeMode: String = "system",
     val showTimestamps: Boolean = false,
     val autoExpandReasoning: Boolean = false,
-    val autoExpandTools: Boolean = false
+    val autoExpandTools: Boolean = false,
+    val connectionIp: String = "",
+    val connectionPort: String = "",
+    val connectionToken: String = ""
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val connectionRepository: ConnectionRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -62,6 +67,21 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.autoExpandTools.collect { value ->
                 _uiState.update { it.copy(autoExpandTools = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.connectionIp.collect { value ->
+                _uiState.update { it.copy(connectionIp = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.connectionPort.collect { value ->
+                _uiState.update { it.copy(connectionPort = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.connectionToken.collect { value ->
+                _uiState.update { it.copy(connectionToken = value) }
             }
         }
     }
@@ -105,6 +125,30 @@ class SettingsViewModel @Inject constructor(
     fun setAutoExpandTools(value: Boolean) {
         viewModelScope.launch {
             settingsRepository.setAutoExpandTools(value)
+        }
+    }
+
+    fun setConnectionIp(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setConnectionIp(value)
+        }
+    }
+
+    fun setConnectionPort(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setConnectionPort(value)
+        }
+    }
+
+    fun setConnectionToken(value: String) {
+        viewModelScope.launch {
+            settingsRepository.setConnectionToken(value)
+        }
+    }
+
+    fun disconnect() {
+        viewModelScope.launch {
+            connectionRepository.disconnect()
         }
     }
 }

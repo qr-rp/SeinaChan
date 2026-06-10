@@ -9,23 +9,30 @@ import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
+import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.service.HermesConnectionService
 import com.seina.chan.ui.components.SeinaSnackbarHost
 import com.seina.chan.ui.navigation.SeinaNavHost
 import com.seina.chan.ui.theme.SeinaChanTheme
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject lateinit var settingsRepository: SettingsRepository
+
     private var connectionService: HermesConnectionService? = null
     private var serviceBound = false
 
@@ -46,7 +53,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         bindHermesService()
         setContent {
-            SeinaChanTheme {
+            val themeMode by settingsRepository.themeMode.collectAsStateWithLifecycle(initialValue = "system")
+            val darkTheme = when (themeMode) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+            SeinaChanTheme(darkTheme = darkTheme) {
                 val snackbarHostState = remember { SnackbarHostState() }
                 val navController = rememberNavController()
 

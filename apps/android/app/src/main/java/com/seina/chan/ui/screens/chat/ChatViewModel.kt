@@ -139,23 +139,21 @@ class ChatViewModel @Inject constructor(
         FileLogger.i("ChatViewModel", "sendMessage() dbSessionId=$currentDbSessionId, wsSessionId=$currentWsSessionId, textLength=${text.length}, images=${images.size}")
         _inputState.update { it.copy(isLoading = true, error = null, selectedImages = emptyList()) }
         viewModelScope.launch {
-            if (currentDbSessionId.isEmpty()) {
-                ensureSession()
-            } else {
-                try {
-                    val sid = sessionRepository.resumeSession(currentDbSessionId)
-                    currentWsSessionId = sid
-                    FileLogger.i("ChatViewModel", "sendMessage() resumeSession succeeded, sid=$sid")
-                } catch (e: Exception) {
-                    FileLogger.w("ChatViewModel", "sendMessage() resumeSession failed, continuing: ${e.message}")
-                }
-            }
             try {
-                // 先发送所有选中的图片
+                if (currentDbSessionId.isEmpty()) {
+                    ensureSession()
+                } else {
+                    try {
+                        val sid = sessionRepository.resumeSession(currentDbSessionId)
+                        currentWsSessionId = sid
+                        FileLogger.i("ChatViewModel", "sendMessage() resumeSession succeeded, sid=$sid")
+                    } catch (e: Exception) {
+                        FileLogger.w("ChatViewModel", "sendMessage() resumeSession failed, continuing: ${e.message}")
+                    }
+                }
                 if (images.isNotEmpty()) {
                     sendImagesInternal(images)
                 }
-                // 再发送文字
                 if (text.isNotEmpty()) {
                     chatRepository.sendMessage(text, currentWsSessionId)
                 }
@@ -202,18 +200,18 @@ class ChatViewModel @Inject constructor(
         FileLogger.i("ChatViewModel", "sendImage() dbSessionId=$currentDbSessionId, wsSessionId=$currentWsSessionId, uri=$uri")
         _inputState.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
-            if (currentDbSessionId.isEmpty()) {
-                ensureSession()
-            } else {
-                try {
-                    val sid = sessionRepository.resumeSession(currentDbSessionId)
-                    currentWsSessionId = sid
-                    FileLogger.i("ChatViewModel", "sendImage() resumeSession succeeded, sid=$sid")
-                } catch (e: Exception) {
-                    FileLogger.w("ChatViewModel", "sendImage() resumeSession failed, continuing: ${e.message}")
-                }
-            }
             try {
+                if (currentDbSessionId.isEmpty()) {
+                    ensureSession()
+                } else {
+                    try {
+                        val sid = sessionRepository.resumeSession(currentDbSessionId)
+                        currentWsSessionId = sid
+                        FileLogger.i("ChatViewModel", "sendImage() resumeSession succeeded, sid=$sid")
+                    } catch (e: Exception) {
+                        FileLogger.w("ChatViewModel", "sendImage() resumeSession failed, continuing: ${e.message}")
+                    }
+                }
                 chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId)
                 _inputState.update { it.copy(isLoading = false) }
                 FileLogger.i("ChatViewModel", "sendImage() succeeded")

@@ -2,6 +2,7 @@ package com.seina.chan.ui.screens.chat
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +51,7 @@ fun ToolCallCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outline, AppShapes.md)
             .clickable { expanded = !expanded },
         shape = AppShapes.md,
         colors = CardDefaults.cardColors(containerColor = SurfaceDark)
@@ -62,7 +64,7 @@ fun ToolCallCard(
                 Text(
                     text = toolCall.name,
                     style = TextStyles.label,
-                    color = Color(0xFFE8E6E1)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.weight(1f))
 
@@ -73,12 +75,12 @@ fun ToolCallCard(
                             Text(
                                 text = "运行中...",
                                 style = TextStyles.caption,
-                                color = Color(0xFFE8E6E1)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             CircularProgressIndicator(
                                 modifier = Modifier.size(12.dp),
-                                color = Color(0xFFE8E6E1),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 strokeWidth = 2.dp
                             )
                         }
@@ -89,7 +91,7 @@ fun ToolCallCard(
                             Text(
                                 text = "完成",
                                 style = TextStyles.caption,
-                                color = Color(0xFFE8E6E1)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Box(
@@ -105,7 +107,7 @@ fun ToolCallCard(
                             Text(
                                 text = "失败",
                                 style = TextStyles.caption,
-                                color = Color(0xFFE8E6E1)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Box(
@@ -121,7 +123,7 @@ fun ToolCallCard(
                 Icon(
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = if (expanded) "收起" else "展开",
-                    tint = Color(0xFFE8E6E1),
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -131,7 +133,7 @@ fun ToolCallCard(
                 Text(
                     text = toolCall.summary.ifBlank { toolCall.args.take(100) },
                     style = TextStyles.caption,
-                    color = Color(0xFF8F8F8F),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -141,7 +143,7 @@ fun ToolCallCard(
                 Text(
                     text = "耗时: ${toolCall.duration}s",
                     style = TextStyles.caption,
-                    color = Color(0xFF8F8F8F),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
@@ -154,13 +156,13 @@ fun ToolCallCard(
                         Text(
                             text = "参数:",
                             style = TextStyles.label,
-                            color = Color(0xFFE8E6E1)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 4.dp)
-                                .background(color = Color(0xFF0F0E0D), shape = AppShapes.xs)
+                                .background(color = MaterialTheme.colorScheme.inverseSurface, shape = AppShapes.xs)
                                 .padding(8.dp)
                         ) {
                             Text(
@@ -177,14 +179,14 @@ fun ToolCallCard(
                         Text(
                             text = "结果:",
                             style = TextStyles.label,
-                            color = Color(0xFFE8E6E1),
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(top = 8.dp)
                         )
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 4.dp)
-                                .background(color = Color(0xFF0F0E0D), shape = AppShapes.xs)
+                                .background(color = MaterialTheme.colorScheme.inverseSurface, shape = AppShapes.xs)
                                 .padding(8.dp)
                         ) {
                             Text(

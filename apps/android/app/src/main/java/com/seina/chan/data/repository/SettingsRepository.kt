@@ -20,6 +20,9 @@ class SettingsRepository(
     val showTimestamps: Flow<Boolean> = dataStore.data.map { it[SHOW_TIMESTAMPS_KEY] ?: false }
     val autoExpandReasoning: Flow<Boolean> = dataStore.data.map { it[AUTO_EXPAND_REASONING_KEY] ?: false }
     val autoExpandTools: Flow<Boolean> = dataStore.data.map { it[AUTO_EXPAND_TOOLS_KEY] ?: false }
+    val connectionIp: Flow<String> = dataStore.data.map { it[CONNECTION_IP_KEY] ?: "" }
+    val connectionPort: Flow<String> = dataStore.data.map { it[CONNECTION_PORT_KEY] ?: "" }
+    val connectionToken: Flow<String> = dataStore.data.map { it[CONNECTION_TOKEN_KEY] ?: "" }
 
     suspend fun setPageSize(value: Int) {
         dataStore.edit { prefs ->
@@ -63,6 +66,24 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setConnectionIp(value: String) {
+        dataStore.edit { prefs ->
+            prefs[CONNECTION_IP_KEY] = value
+        }
+    }
+
+    suspend fun setConnectionPort(value: String) {
+        dataStore.edit { prefs ->
+            prefs[CONNECTION_PORT_KEY] = value
+        }
+    }
+
+    suspend fun setConnectionToken(value: String) {
+        dataStore.edit { prefs ->
+            prefs[CONNECTION_TOKEN_KEY] = value
+        }
+    }
+
     companion object {
         private val PAGE_SIZE_KEY = intPreferencesKey("page_size")
         private val SHOW_TOOL_CALLS_KEY = booleanPreferencesKey("show_tool_calls")
@@ -71,5 +92,8 @@ class SettingsRepository(
         private val SHOW_TIMESTAMPS_KEY = booleanPreferencesKey("show_timestamps")
         private val AUTO_EXPAND_REASONING_KEY = booleanPreferencesKey("auto_expand_reasoning")
         private val AUTO_EXPAND_TOOLS_KEY = booleanPreferencesKey("auto_expand_tools")
+        private val CONNECTION_IP_KEY = stringPreferencesKey("connection_ip")
+        private val CONNECTION_PORT_KEY = stringPreferencesKey("connection_port")
+        private val CONNECTION_TOKEN_KEY = stringPreferencesKey("connection_token")
     }
 }
