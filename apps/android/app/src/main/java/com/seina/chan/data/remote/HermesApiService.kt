@@ -129,7 +129,7 @@ class HermesApiService(
     }
 
     suspend fun getStatus(): HermesStatus = get("/api/status")
-    suspend fun getSessions(limit: Int = 20): SessionsResponse = get("/api/sessions?limit=$limit")
+    suspend fun getSessions(limit: Int = 20, offset: Int = 0): SessionsResponse = get("/api/sessions?limit=$limit&offset=$offset")
     suspend fun getSessionMessages(sessionId: String): MessagesResponse = get("/api/sessions/$sessionId/messages")
     suspend fun getModelInfo(): ModelInfo = get("/api/model/info")
 

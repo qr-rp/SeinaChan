@@ -74,6 +74,28 @@ class MainActivity : ComponentActivity() {
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 应用回到前台时，移除前台服务通知，避免干扰用户
+        val intent = Intent(this, HermesConnectionService::class.java).apply {
+            action = HermesConnectionService.ACTION_STOP_FOREGROUND
+        }
+        startService(intent)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // 应用进入后台时，启动前台服务并显示持久通知，防止连接被系统切断
+        val intent = Intent(this, HermesConnectionService::class.java).apply {
+            action = HermesConnectionService.ACTION_START_FOREGROUND
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         if (serviceBound) {

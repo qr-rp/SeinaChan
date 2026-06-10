@@ -10,6 +10,7 @@ import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.data.repository.ChatRepository
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
+import com.seina.chan.data.repository.SettingsRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -104,5 +105,13 @@ object AppModule {
         wsClient: HermesWsClient
     ): ChatRepository {
         return ChatRepository(wsClient)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSettingsRepository(
+        dataStore: DataStore<Preferences>
+    ): SettingsRepository {
+        return SettingsRepository(dataStore)
     }
 }

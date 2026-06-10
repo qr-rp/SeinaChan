@@ -1,5 +1,6 @@
 package com.seina.chan.ui.screens.chat
 
+import android.net.Uri
 import com.seina.chan.data.model.ChatMessage
 
 data class ChatUiState(
@@ -7,5 +8,6 @@ data class ChatUiState(
     val isLoading: Boolean = false,
     val currentInput: String = "",
     val canSend: Boolean = true,
-    val error: String? = null
+    val error: String? = null,
+    val selectedImages: List<Uri> = emptyList()
 )

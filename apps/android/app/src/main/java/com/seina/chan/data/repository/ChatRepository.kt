@@ -1,8 +1,11 @@
 package com.seina.chan.data.repository
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.util.Base64
 import com.seina.chan.data.model.ChatMessage
-import com.seina.chan.data.model.ToolCall
-import com.seina.chan.data.model.ToolStatus
+import com.seina.chan.data.model.ToolCallDetail
+import com.seina.chan.data.model.ToolCallStatus
 import com.seina.chan.data.remote.GatewayEvent
 import com.seina.chan.data.remote.HermesWsClient
 import kotlinx.coroutines.CoroutineScope
@@ -13,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -46,6 +50,41 @@ class ChatRepository(
             put("text", text)
         }
         wsClient.request("prompt.submit", params)
+    }
+
+    /**
+     * 发送图片消息
+     * @param imageUri 图片 URI
+     * @param contentResolver 用于读取图片内容
+     * @param sessionId 会话 ID
+     */
+    suspend fun sendImage(imageUri: Uri, contentResolver: ContentResolver, sessionId: String) {
+        // 读取图片并转为 base64
+        val base64Data = withContext(Dispatchers.IO) {
+            contentResolver.openInputStream(imageUri)?.use { inputStream ->
+                val bytes = inputStream.readBytes()
+                Base64.encodeToString(bytes, Base64.NO_WRAP)
+            } ?: throw IllegalArgumentException("无法读取图片")
+        }
+
+        // 在本地消息列表添加用户图片消息占位
+        val userMessage = ChatMessage(
+            id = java.util.UUID.randomUUID().toString(),
+            role = "user",
+            content = "",
+            isStreaming = false,
+            imageUrl = imageUri.toString()
+        )
+        _messages.value += userMessage
+
+        // 构造 data URI
+        val dataUri = "data:image/jpeg;base64,$base64Data"
+        val params = buildJsonObject {
+            put("session_id", sessionId)
+            put("data", dataUri)
+            put("name", "image.jpg")
+        }
+        wsClient.request("image.attach_bytes", params)
     }
 
     suspend fun respondApproval(requestId: String, approved: Boolean) {
@@ -88,7 +127,8 @@ class ChatRepository(
                     id = msgId,
                     role = event.role.ifBlank { "assistant" },
                     content = "",
-                    isStreaming = true
+                    isStreaming = true,
+                    isReasoning = true
                 )
                 _messages.value += msg
             }
@@ -102,36 +142,51 @@ class ChatRepository(
             is GatewayEvent.MessageComplete -> {
                 _messages.value = _messages.value.mapIndexed { index, msg ->
                     if (index == _messages.value.lastIndex && msg.isStreaming && msg.role == "assistant") {
-                        msg.copy(isStreaming = false)
+                        msg.copy(
+                            isStreaming = false,
+                            isReasoning = false,
+                            reasoningText = event.reasoning.ifBlank { msg.reasoningText }
+                        )
                     } else msg
                 }
             }
+            is GatewayEvent.ReasoningDelta -> {
+                updateLastStreamingAssistantMessage { it.copy(reasoningText = it.reasoningText + event.text) }
+            }
             is GatewayEvent.ThinkingDelta -> {
-                // Thinking content is not stored separately in ChatMessage currently
+                updateLastStreamingAssistantMessage { it.copy(reasoningText = it.reasoningText + event.text) }
+            }
+            is GatewayEvent.ReasoningAvailable -> {
+                updateLastStreamingAssistantMessage { it.copy(reasoningText = event.text) }
             }
             is GatewayEvent.ToolStart -> {
-                val toolCall = ToolCall(
-                    id = event.id,
-                    toolName = event.toolName,
-                    status = ToolStatus.Running,
-                    input = event.input.toString()
+                val toolCall = ToolCallDetail(
+                    id = event.toolId,
+                    name = event.name,
+                    args = event.args,
+                    status = ToolCallStatus.Running
                 )
                 appendToolCallToStreamingMessage(toolCall)
             }
             is GatewayEvent.ToolProgress -> {
-                updateToolCall(event.id) { it.copy(output = it.output + event.content) }
+                updateToolCall(event.toolId) { it.copy(result = it.result + event.text) }
             }
             is GatewayEvent.ToolComplete -> {
-                updateToolCall(event.id) {
-                    it.copy(status = ToolStatus.Completed, output = event.output ?: it.output)
+                updateToolCall(event.toolId) {
+                    it.copy(
+                        status = ToolCallStatus.Success,
+                        result = event.result,
+                        duration = event.duration,
+                        summary = event.summary
+                    )
                 }
             }
             is GatewayEvent.ApprovalRequest -> {
-                val toolCall = ToolCall(
+                val toolCall = ToolCallDetail(
                     id = event.id,
-                    toolName = event.toolName,
-                    status = ToolStatus.Pending,
-                    input = event.input.toString()
+                    name = event.toolName,
+                    args = event.input.toString(),
+                    status = ToolCallStatus.Running
                 )
                 appendToolCallToStreamingMessage(toolCall)
             }
@@ -139,13 +194,15 @@ class ChatRepository(
         }
     }
 
-    private fun updateMessage(id: String, transform: (ChatMessage) -> ChatMessage) {
-        _messages.value = _messages.value.map {
-            if (it.id == id) transform(it) else it
+    private fun updateLastStreamingAssistantMessage(transform: (ChatMessage) -> ChatMessage) {
+        _messages.value = _messages.value.mapIndexed { index, msg ->
+            if (index == _messages.value.lastIndex && msg.role == "assistant") {
+                transform(msg)
+            } else msg
         }
     }
 
-    private fun appendToolCallToStreamingMessage(toolCall: ToolCall) {
+    private fun appendToolCallToStreamingMessage(toolCall: ToolCallDetail) {
         _messages.value = _messages.value.map { msg ->
             if (msg.isStreaming && msg.role == "assistant") {
                 msg.copy(toolCalls = msg.toolCalls + toolCall)
@@ -153,7 +210,7 @@ class ChatRepository(
         }
     }
 
-    private fun updateToolCall(id: String, transform: (ToolCall) -> ToolCall) {
+    private fun updateToolCall(id: String, transform: (ToolCallDetail) -> ToolCallDetail) {
         _messages.value = _messages.value.map { msg ->
             msg.copy(toolCalls = msg.toolCalls.map {
                 if (it.id == id) transform(it) else it

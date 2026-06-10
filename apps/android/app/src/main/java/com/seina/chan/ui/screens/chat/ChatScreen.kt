@@ -1,7 +1,6 @@
 package com.seina.chan.ui.screens.chat
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,12 +8,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
@@ -57,16 +59,28 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     sessionId: String,
     onBack: () -> Unit,
-    onReconfigure: () -> Unit = {}
+    onReconfigure: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var currentSessionId by rememberSaveable { mutableStateOf(sessionId) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
     val pendingApproval = remember { mutableStateOf<GatewayEvent.ApprovalRequest?>(null) }
     val pendingClarify = remember { mutableStateOf<GatewayEvent.ClarifyRequest?>(null) }
     val pendingSecret = remember { mutableStateOf<GatewayEvent.SecretRequest?>(null) }
+
+    val imePaddingBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    val isKeyboardVisible = imePaddingBottom > 0.dp
+
+    // 消息数量变化或键盘弹出时自动滚动到底部
+    LaunchedEffect(uiState.messages.size, isKeyboardVisible) {
+        if (uiState.messages.isNotEmpty()) {
+            listState.animateScrollToItem(uiState.messages.size - 1)
+        }
+    }
 
     LaunchedEffect(currentSessionId) {
         if (currentSessionId.isNotEmpty()) {
@@ -179,6 +193,10 @@ fun ChatScreen(
                         onReconfigure = {
                             scope.launch { drawerState.close() }
                             onReconfigure()
+                        },
+                        onNavigateToSettings = {
+                            scope.launch { drawerState.close() }
+                            onNavigateToSettings()
                         }
                     )
                 }
@@ -189,8 +207,6 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Canvas)
-                .safeDrawingPadding()
-                .imePadding()
         ) {
             // Top bar
             Row(
@@ -214,7 +230,7 @@ fun ChatScreen(
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = onReconfigure) {
+                IconButton(onClick = onNavigateToSettings) {
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "设置",
@@ -233,11 +249,17 @@ fun ChatScreen(
                 ) {
                     if (uiState.isLoading) {
                         androidx.compose.material3.CircularProgressIndicator(color = Primary)
+                    } else if (uiState.error != null) {
+                        Text(
+                            text = uiState.error ?: "",
+                            style = TextStyles.bodyMd,
+                            color = Primary
+                        )
                     } else {
                         Text(
-                            text = uiState.error ?: "开始聊天吧",
+                            text = "开始聊天吧",
                             style = TextStyles.bodyMd,
-                            color = if (uiState.error != null) Primary else Ink
+                            color = Ink
                         )
                     }
                 }
@@ -247,7 +269,9 @@ fun ChatScreen(
                         .fillMaxWidth()
                         .weight(1f)
                         .padding(horizontal = Spacing.md),
-                    reverseLayout = false
+                    reverseLayout = false,
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
                     items(uiState.messages, key = { it.id }) { message ->
                         MessageBubble(message = message)
@@ -255,16 +279,18 @@ fun ChatScreen(
                 }
             }
 
-            // Error message
-            uiState.error?.let { error ->
-                Text(
-                    text = error,
-                    style = TextStyles.caption,
-                    color = Primary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = Spacing.md)
-                )
+            // Error message（仅在非空状态时显示，避免与空状态占位符重复）
+            if (uiState.messages.isNotEmpty()) {
+                uiState.error?.let { error ->
+                    Text(
+                        text = error,
+                        style = TextStyles.caption,
+                        color = Primary,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.md)
+                    )
+                }
             }
 
             // Composer
@@ -272,7 +298,10 @@ fun ChatScreen(
                 value = uiState.currentInput,
                 onValueChange = viewModel::onInputChange,
                 onSend = viewModel::sendMessage,
-                sendEnabled = uiState.canSend
+                sendEnabled = uiState.canSend,
+                selectedImages = uiState.selectedImages,
+                onImagesSelected = viewModel::onImagesSelected,
+                onRemoveImage = viewModel::removeSelectedImage
             )
         }
     }

@@ -26,6 +26,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -257,25 +258,45 @@ class HermesWsClient(
                 id = payload?.get("id")?.jsonPrimitive?.content ?: "",
                 delta = payload?.get("text")?.jsonPrimitive?.content ?: ""
             )
-            "message.complete" -> GatewayEvent.MessageComplete(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: ""
+            "message.complete" -> {
+                val reasoning = payload?.get("reasoning")?.jsonPrimitive?.content ?: ""
+                GatewayEvent.MessageComplete(
+                    id = payload?.get("id")?.jsonPrimitive?.content ?: "",
+                    reasoning = reasoning
+                )
+            }
+            "reasoning.delta" -> GatewayEvent.ReasoningDelta(
+                text = payload?.get("text")?.jsonPrimitive?.content ?: ""
             )
             "thinking.delta" -> GatewayEvent.ThinkingDelta(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                delta = payload?.get("text")?.jsonPrimitive?.content ?: ""
+                text = payload?.get("text")?.jsonPrimitive?.content ?: ""
             )
-            "tool.start" -> GatewayEvent.ToolStart(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                toolName = payload?.get("tool_name")?.jsonPrimitive?.content ?: "",
-                input = emptyMap()
+            "reasoning.available" -> GatewayEvent.ReasoningAvailable(
+                text = payload?.get("text")?.jsonPrimitive?.content ?: ""
             )
+            "tool.start" -> {
+                val argsElement = payload?.get("args")
+                val argsString = when {
+                    argsElement == null -> ""
+                    argsElement is JsonPrimitive -> argsElement.jsonPrimitive.content
+                    else -> argsElement.toString()
+                }
+                GatewayEvent.ToolStart(
+                    toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
+                    name = payload?.get("name")?.jsonPrimitive?.content ?: "",
+                    args = argsString
+                )
+            }
             "tool.progress" -> GatewayEvent.ToolProgress(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                content = payload?.get("content")?.jsonPrimitive?.content ?: ""
+                toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
+                text = payload?.get("text")?.jsonPrimitive?.content ?: ""
             )
             "tool.complete" -> GatewayEvent.ToolComplete(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                output = payload?.get("output")?.jsonPrimitive?.content
+                toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
+                name = payload?.get("name")?.jsonPrimitive?.content ?: "",
+                result = payload?.get("result")?.jsonPrimitive?.content ?: "",
+                duration = payload?.get("duration")?.jsonPrimitive?.content?.toFloatOrNull(),
+                summary = payload?.get("summary")?.jsonPrimitive?.content ?: ""
             )
             "approval.request" -> GatewayEvent.ApprovalRequest(
                 id = payload?.get("id")?.jsonPrimitive?.content ?: "",

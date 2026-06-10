@@ -26,6 +26,7 @@ ENV/
 
 # IDE
 .idea/
+.trae/
 *.iml
 .vscode/
 *.swp
@@ -41,6 +42,9 @@ Thumbs.db
 *.db-journal
 .hermes_session_token
 hermes-cli.log
+hermes-agent/
+DESIGN.md
+test*.py
 
 # Node
 node_modules/

@@ -5,20 +5,24 @@ data class ChatMessage(
     val role: String,
     val content: String,
     val isStreaming: Boolean = false,
-    val toolCalls: List<ToolCall> = emptyList()
+    val reasoningText: String = "",
+    val isReasoning: Boolean = false,
+    val toolCalls: List<ToolCallDetail> = emptyList(),
+    val imageUrl: String? = null
 )
 
-data class ToolCall(
+data class ToolCallDetail(
     val id: String,
-    val toolName: String,
-    val status: ToolStatus,
-    val input: String = "",
-    val output: String = ""
+    val name: String,
+    val args: String = "",
+    val result: String = "",
+    val duration: Float? = null,
+    val status: ToolCallStatus,
+    val summary: String = ""
 )
 
-enum class ToolStatus {
-    Pending,
+enum class ToolCallStatus {
     Running,
-    Completed,
+    Success,
     Failed
 }

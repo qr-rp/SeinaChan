@@ -6,6 +6,7 @@ import com.seina.chan.data.model.Session
 import com.seina.chan.data.remote.ConnectionState
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
+import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -20,7 +21,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SessionListViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
-    private val connectionRepository: ConnectionRepository
+    private val connectionRepository: ConnectionRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _sessions = MutableStateFlow<List<Session>>(emptyList())
@@ -37,26 +39,101 @@ class SessionListViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isLoadingMore = MutableStateFlow(false)
+    val isLoadingMore: StateFlow<Boolean> = _isLoadingMore.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    fun loadSessions() {
+    private val _hasMore = MutableStateFlow(true)
+    val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
+
+    // 分页状态
+    private var offset = 0
+    private var limit = 20
+
+    init {
         viewModelScope.launch {
-            FileLogger.i("SessionListViewModel", "loadSessions() started")
-            _isLoading.value = true
+            settingsRepository.pageSize.collect { pageSize ->
+                limit = pageSize
+            }
+        }
+    }
+
+    /**
+     * 加载会话列表
+     * @param refresh 是否为刷新操作：true 则重置 offset 并清空列表，false 则追加加载更多
+     */
+    fun loadSessions(refresh: Boolean = false) {
+        viewModelScope.launch {
+            if (refresh) {
+                offset = 0
+                _sessions.value = emptyList()
+                _isRefreshing.value = true
+            } else {
+                // 如果当前列表为空（初始加载），offset 保持 0；否则追加加载
+                if (_sessions.value.isNotEmpty()) {
+                    offset += limit
+                }
+                _isLoading.value = true
+            }
             _error.value = null
             try {
-                val result = sessionRepository.fetchSessions()
-                FileLogger.i("SessionListViewModel", "loadSessions() succeeded, count=${result.size}")
-                _sessions.value = result
+                val result = sessionRepository.fetchSessions(limit = limit, offset = offset)
+                FileLogger.i("SessionListViewModel", "loadSessions(refresh=$refresh) succeeded, count=${result.sessions.size}, total=${result.total}")
+                _sessions.value = _sessions.value + result.sessions
+                _hasMore.value = result.hasMore
             } catch (e: Exception) {
-                FileLogger.e("SessionListViewModel", "loadSessions() failed", e)
-                _sessions.value = emptyList()
+                FileLogger.e("SessionListViewModel", "loadSessions(refresh=$refresh) failed", e)
+                if (!refresh && _sessions.value.isNotEmpty()) {
+                    // 加载更多失败时回退 offset
+                    offset -= limit
+                    if (offset < 0) offset = 0
+                }
+                if (_sessions.value.isEmpty()) {
+                    _sessions.value = emptyList()
+                }
                 _error.value = e.message
             } finally {
                 _isLoading.value = false
+                _isRefreshing.value = false
             }
         }
+    }
+
+    /**
+     * 加载更多会话
+     */
+    fun loadMore() {
+        if (!_hasMore.value || _isLoadingMore.value || _isLoading.value || _isRefreshing.value) return
+        viewModelScope.launch {
+            _isLoadingMore.value = true
+            offset += limit
+            _error.value = null
+            try {
+                val result = sessionRepository.fetchSessions(limit = limit, offset = offset)
+                FileLogger.i("SessionListViewModel", "loadMore() succeeded, count=${result.sessions.size}, total=${result.total}")
+                _sessions.value = _sessions.value + result.sessions
+                _hasMore.value = result.hasMore
+            } catch (e: Exception) {
+                FileLogger.e("SessionListViewModel", "loadMore() failed", e)
+                offset -= limit
+                if (offset < 0) offset = 0
+                _error.value = e.message
+            } finally {
+                _isLoadingMore.value = false
+            }
+        }
+    }
+
+    /**
+     * 下拉刷新
+     */
+    fun refresh() {
+        loadSessions(refresh = true)
     }
 
     fun createNewSession() {
@@ -66,7 +143,7 @@ class SessionListViewModel @Inject constructor(
                 val result = sessionRepository.createSession()
                 FileLogger.i("SessionListViewModel", "createNewSession() succeeded, storedId=${result.storedSessionId}, sid=${result.sid}")
                 _newSessionCreated.emit(result.storedSessionId)
-                loadSessions()
+                loadSessions(refresh = true)
             } catch (e: Exception) {
                 FileLogger.e("SessionListViewModel", "createNewSession() failed", e)
             }
@@ -91,7 +168,7 @@ class SessionListViewModel @Inject constructor(
             try {
                 sessionRepository.deleteSession(sessionId)
                 FileLogger.i("SessionListViewModel", "deleteSession() succeeded")
-                loadSessions()
+                loadSessions(refresh = true)
             } catch (e: Exception) {
                 FileLogger.e("SessionListViewModel", "deleteSession() failed", e)
             }
@@ -104,7 +181,7 @@ class SessionListViewModel @Inject constructor(
             try {
                 sessionRepository.renameSession(sessionId, title)
                 FileLogger.i("SessionListViewModel", "renameSession() succeeded")
-                loadSessions()
+                loadSessions(refresh = true)
             } catch (e: Exception) {
                 FileLogger.e("SessionListViewModel", "renameSession() failed", e)
             }

@@ -1,0 +1,75 @@
+package com.seina.chan.data.repository
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+class SettingsRepository(
+    private val dataStore: DataStore<Preferences>
+) {
+
+    val pageSize: Flow<Int> = dataStore.data.map { it[PAGE_SIZE_KEY] ?: 20 }
+    val showToolCalls: Flow<Boolean> = dataStore.data.map { it[SHOW_TOOL_CALLS_KEY] ?: true }
+    val showReasoning: Flow<Boolean> = dataStore.data.map { it[SHOW_REASONING_KEY] ?: true }
+    val themeMode: Flow<String> = dataStore.data.map { it[THEME_MODE_KEY] ?: "system" }
+    val showTimestamps: Flow<Boolean> = dataStore.data.map { it[SHOW_TIMESTAMPS_KEY] ?: false }
+    val autoExpandReasoning: Flow<Boolean> = dataStore.data.map { it[AUTO_EXPAND_REASONING_KEY] ?: false }
+    val autoExpandTools: Flow<Boolean> = dataStore.data.map { it[AUTO_EXPAND_TOOLS_KEY] ?: false }
+
+    suspend fun setPageSize(value: Int) {
+        dataStore.edit { prefs ->
+            prefs[PAGE_SIZE_KEY] = value
+        }
+    }
+
+    suspend fun setShowToolCalls(value: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[SHOW_TOOL_CALLS_KEY] = value
+        }
+    }
+
+    suspend fun setShowReasoning(value: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[SHOW_REASONING_KEY] = value
+        }
+    }
+
+    suspend fun setThemeMode(value: String) {
+        dataStore.edit { prefs ->
+            prefs[THEME_MODE_KEY] = value
+        }
+    }
+
+    suspend fun setShowTimestamps(value: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[SHOW_TIMESTAMPS_KEY] = value
+        }
+    }
+
+    suspend fun setAutoExpandReasoning(value: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[AUTO_EXPAND_REASONING_KEY] = value
+        }
+    }
+
+    suspend fun setAutoExpandTools(value: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[AUTO_EXPAND_TOOLS_KEY] = value
+        }
+    }
+
+    companion object {
+        private val PAGE_SIZE_KEY = intPreferencesKey("page_size")
+        private val SHOW_TOOL_CALLS_KEY = booleanPreferencesKey("show_tool_calls")
+        private val SHOW_REASONING_KEY = booleanPreferencesKey("show_reasoning")
+        private val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
+        private val SHOW_TIMESTAMPS_KEY = booleanPreferencesKey("show_timestamps")
+        private val AUTO_EXPAND_REASONING_KEY = booleanPreferencesKey("auto_expand_reasoning")
+        private val AUTO_EXPAND_TOOLS_KEY = booleanPreferencesKey("auto_expand_tools")
+    }
+}

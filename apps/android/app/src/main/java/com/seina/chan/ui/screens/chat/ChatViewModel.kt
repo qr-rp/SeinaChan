@@ -1,5 +1,7 @@
 package com.seina.chan.ui.screens.chat
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.remote.ConnectionState
@@ -9,6 +11,7 @@ import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +26,8 @@ class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val sessionRepository: SessionRepository,
     private val connectionRepository: ConnectionRepository,
-    private val wsClient: HermesWsClient
+    private val wsClient: HermesWsClient,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _inputState = MutableStateFlow(ChatUiState())
@@ -72,7 +76,7 @@ class ChatViewModel @Inject constructor(
     ) { inputState, messages ->
         inputState.copy(
             messages = messages,
-            canSend = inputState.currentInput.isNotBlank() && !inputState.isLoading
+            canSend = (inputState.currentInput.isNotBlank() || inputState.selectedImages.isNotEmpty()) && !inputState.isLoading
         )
     }.stateIn(
         scope = viewModelScope,
@@ -129,10 +133,11 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage() {
         val text = _inputState.value.currentInput.trim()
-        if (text.isEmpty()) return
+        val images = _inputState.value.selectedImages
+        if (text.isEmpty() && images.isEmpty()) return
 
-        FileLogger.i("ChatViewModel", "sendMessage() dbSessionId=$currentDbSessionId, wsSessionId=$currentWsSessionId, textLength=${text.length}")
-        _inputState.update { it.copy(isLoading = true, error = null) }
+        FileLogger.i("ChatViewModel", "sendMessage() dbSessionId=$currentDbSessionId, wsSessionId=$currentWsSessionId, textLength=${text.length}, images=${images.size}")
+        _inputState.update { it.copy(isLoading = true, error = null, selectedImages = emptyList()) }
         viewModelScope.launch {
             if (currentDbSessionId.isEmpty()) {
                 ensureSession()
@@ -146,11 +151,74 @@ class ChatViewModel @Inject constructor(
                 }
             }
             try {
-                chatRepository.sendMessage(text, currentWsSessionId)
+                // 先发送所有选中的图片
+                if (images.isNotEmpty()) {
+                    sendImagesInternal(images)
+                }
+                // 再发送文字
+                if (text.isNotEmpty()) {
+                    chatRepository.sendMessage(text, currentWsSessionId)
+                }
                 _inputState.update { it.copy(currentInput = "", isLoading = false) }
                 FileLogger.i("ChatViewModel", "sendMessage() succeeded")
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "sendMessage() failed", e)
+                _inputState.update { it.copy(isLoading = false, error = e.message) }
+            }
+        }
+    }
+
+    /**
+     * 设置选中的图片列表
+     */
+    fun onImagesSelected(uris: List<Uri>) {
+        _inputState.update { it.copy(selectedImages = uris) }
+    }
+
+    /**
+     * 移除一张选中的图片
+     */
+    fun removeSelectedImage(uri: Uri) {
+        _inputState.update { it.copy(selectedImages = it.selectedImages.filter { u -> u != uri }) }
+    }
+
+    private suspend fun sendImagesInternal(uris: List<Uri>) {
+        for (uri in uris) {
+            try {
+                chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId)
+                FileLogger.i("ChatViewModel", "sendImage() succeeded for uri=$uri")
+            } catch (e: Exception) {
+                FileLogger.e("ChatViewModel", "sendImage() failed for uri=$uri", e)
+                throw e
+            }
+        }
+    }
+
+    /**
+     * 发送图片消息
+     * @param uri 选择的图片 URI
+     */
+    fun sendImage(uri: Uri) {
+        FileLogger.i("ChatViewModel", "sendImage() dbSessionId=$currentDbSessionId, wsSessionId=$currentWsSessionId, uri=$uri")
+        _inputState.update { it.copy(isLoading = true, error = null) }
+        viewModelScope.launch {
+            if (currentDbSessionId.isEmpty()) {
+                ensureSession()
+            } else {
+                try {
+                    val sid = sessionRepository.resumeSession(currentDbSessionId)
+                    currentWsSessionId = sid
+                    FileLogger.i("ChatViewModel", "sendImage() resumeSession succeeded, sid=$sid")
+                } catch (e: Exception) {
+                    FileLogger.w("ChatViewModel", "sendImage() resumeSession failed, continuing: ${e.message}")
+                }
+            }
+            try {
+                chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId)
+                _inputState.update { it.copy(isLoading = false) }
+                FileLogger.i("ChatViewModel", "sendImage() succeeded")
+            } catch (e: Exception) {
+                FileLogger.e("ChatViewModel", "sendImage() failed", e)
                 _inputState.update { it.copy(isLoading = false, error = e.message) }
             }
         }
@@ -177,11 +245,8 @@ class ChatViewModel @Inject constructor(
                 val history = sessionRepository.fetchMessages(dbSessionId)
                 FileLogger.i("ChatViewModel", "loadMessages() loaded ${history.size} messages")
                 chatRepository.setMessages(history)
-                if (history.isEmpty()) {
-                    _inputState.update { it.copy(isLoading = false, error = "该会话暂无历史消息 (sessionId=$dbSessionId)") }
-                } else {
-                    _inputState.update { it.copy(isLoading = false, error = null) }
-                }
+                // 空会话不设置 error，保持 error = null，由 UI 判断显示空状态提示
+                _inputState.update { it.copy(isLoading = false, error = null) }
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "loadMessages() failed", e)
                 _inputState.update { it.copy(isLoading = false, error = "加载历史消息失败: ${e.message}") }

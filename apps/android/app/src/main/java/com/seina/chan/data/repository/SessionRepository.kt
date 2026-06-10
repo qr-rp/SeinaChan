@@ -2,8 +2,6 @@ package com.seina.chan.data.repository
 
 import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.data.model.Session
-import com.seina.chan.data.model.ToolCall
-import com.seina.chan.data.model.ToolStatus
 import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
@@ -18,12 +16,22 @@ data class CreateSessionResult(
     val storedSessionId: String
 )
 
+/**
+ * 会话分页结果
+ */
+data class SessionsPageResult(
+    val sessions: List<Session>,
+    val total: Int,
+    val hasMore: Boolean
+)
+
 class SessionRepository(
     private val apiService: HermesApiService,
     private val wsClient: HermesWsClient
 ) {
-    suspend fun fetchSessions(): List<Session> {
-        return apiService.getSessions().sessions.map {
+    suspend fun fetchSessions(limit: Int = 20, offset: Int = 0): SessionsPageResult {
+        val response = apiService.getSessions(limit = limit, offset = offset)
+        val sessions = response.sessions.map {
             Session(
                 id = it.id,
                 title = it.title,
@@ -32,6 +40,13 @@ class SessionRepository(
                 lastActiveAt = it.lastActiveAt?.toString()
             )
         }
+        // 根据返回的数据判断是否还有更多：当本次返回数量达到 limit 时认为可能还有更多
+        val hasMore = sessions.size >= limit
+        return SessionsPageResult(
+            sessions = sessions,
+            total = response.total,
+            hasMore = hasMore
+        )
     }
 
     suspend fun fetchMessages(sessionId: String): List<ChatMessage> {

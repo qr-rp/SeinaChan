@@ -39,36 +39,51 @@ sealed class GatewayEvent {
     @Serializable
     @SerialName("message.complete")
     data class MessageComplete(
-        val id: String
+        val id: String,
+        val reasoning: String = ""
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName("reasoning.delta")
+    data class ReasoningDelta(
+        val text: String
     ) : GatewayEvent()
 
     @Serializable
     @SerialName("thinking.delta")
     data class ThinkingDelta(
-        val id: String,
-        val delta: String
+        val text: String
+    ) : GatewayEvent()
+
+    @Serializable
+    @SerialName("reasoning.available")
+    data class ReasoningAvailable(
+        val text: String
     ) : GatewayEvent()
 
     @Serializable
     @SerialName("tool.start")
     data class ToolStart(
-        val id: String,
-        val toolName: String,
-        val input: Map<String, String> = emptyMap()
+        val toolId: String,
+        val name: String,
+        val args: String = ""
     ) : GatewayEvent()
 
     @Serializable
     @SerialName("tool.progress")
     data class ToolProgress(
-        val id: String,
-        val content: String
+        val toolId: String,
+        val text: String
     ) : GatewayEvent()
 
     @Serializable
     @SerialName("tool.complete")
     data class ToolComplete(
-        val id: String,
-        val output: String? = null
+        val toolId: String,
+        val name: String,
+        val result: String = "",
+        val duration: Float? = null,
+        val summary: String = ""
     ) : GatewayEvent()
 
     @Serializable
@@ -109,7 +124,9 @@ object GatewayEventSerializer : JsonContentPolymorphicSerializer<GatewayEvent>(G
             "message.start" -> GatewayEvent.MessageStart.serializer()
             "message.delta" -> GatewayEvent.MessageDelta.serializer()
             "message.complete" -> GatewayEvent.MessageComplete.serializer()
+            "reasoning.delta" -> GatewayEvent.ReasoningDelta.serializer()
             "thinking.delta" -> GatewayEvent.ThinkingDelta.serializer()
+            "reasoning.available" -> GatewayEvent.ReasoningAvailable.serializer()
             "tool.start" -> GatewayEvent.ToolStart.serializer()
             "tool.progress" -> GatewayEvent.ToolProgress.serializer()
             "tool.complete" -> GatewayEvent.ToolComplete.serializer()

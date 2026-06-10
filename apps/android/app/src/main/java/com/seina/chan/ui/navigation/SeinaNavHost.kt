@@ -10,10 +10,12 @@ import androidx.navigation.compose.composable
 import com.seina.chan.ui.components.GlobalEventHandler
 import com.seina.chan.ui.screens.chat.ChatScreen
 import com.seina.chan.ui.screens.connect.ConnectScreen
+import com.seina.chan.ui.screens.settings.SettingsScreen
 
 object Routes {
     const val CONNECT = "connect"
     const val CHAT = "chat"
+    const val SETTINGS = "settings"
 }
 
 @Composable
@@ -42,7 +44,15 @@ fun SeinaNavHost(
                     navController.navigate(Routes.CONNECT) {
                         popUpTo(Routes.CONNECT) { inclusive = true }
                     }
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Routes.SETTINGS)
                 }
+            )
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                navController = navController
             )
         }
     }
