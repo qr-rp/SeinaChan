@@ -118,6 +118,17 @@ class ChatRepository(
         }
     }
 
+    /**
+     * 提交空 prompt 以触发 assistant 回复（用于纯图片发送场景）
+     */
+    suspend fun submitPrompt(sessionId: String) {
+        val params = buildJsonObject {
+            put("session_id", sessionId)
+            put("text", "")
+        }
+        wsClient.request("prompt.submit", params)
+    }
+
     suspend fun respondApproval(requestId: String, approved: Boolean) {
         val params = buildJsonObject {
             put("requestId", requestId)

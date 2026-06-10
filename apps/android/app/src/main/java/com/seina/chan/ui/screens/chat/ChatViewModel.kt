@@ -168,6 +168,9 @@ class ChatViewModel @Inject constructor(
                 }
                 if (text.isNotEmpty()) {
                     chatRepository.sendMessage(text, currentWsSessionId)
+                } else if (images.isNotEmpty()) {
+                    // 纯图片场景：发送空 prompt 触发 assistant 回复
+                    chatRepository.submitPrompt(currentWsSessionId)
                 }
                 _inputState.update { it.copy(currentInput = "", isLoading = false) }
                 FileLogger.i("ChatViewModel", "sendMessage() succeeded")
