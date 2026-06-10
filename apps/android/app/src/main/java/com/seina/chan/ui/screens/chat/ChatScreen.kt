@@ -1,6 +1,7 @@
 package com.seina.chan.ui.screens.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,11 +35,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.seina.chan.data.remote.GatewayEvent
@@ -68,6 +74,7 @@ fun ChatScreen(
     val pendingApproval = remember { mutableStateOf<GatewayEvent.ApprovalRequest?>(null) }
     val pendingClarify = remember { mutableStateOf<GatewayEvent.ClarifyRequest?>(null) }
     val pendingSecret = remember { mutableStateOf<GatewayEvent.SecretRequest?>(null) }
+    var previewImageUri by remember { mutableStateOf<String?>(null) }
 
     // 消息数量变化时自动滚动到最新消息
     LaunchedEffect(uiState.messages.size) {
@@ -160,6 +167,33 @@ fun ChatScreen(
         },
         onDismiss = { pendingSecret.value = null }
     )
+
+    // 图片全屏预览弹窗
+    previewImageUri?.let { uri ->
+        Dialog(
+            onDismissRequest = { previewImageUri = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.9f))
+                    .clickable { previewImageUri = null },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = uri,
+                    contentDescription = "图片预览",
+                    modifier = Modifier.fillMaxWidth(0.95f),
+                    contentScale = ContentScale.Fit
+                )
+            }
+        }
+    }
 
     val title = if (currentSessionId.isEmpty()) "口袋星奈" else currentSessionId.take(8)
 
@@ -288,7 +322,8 @@ fun ChatScreen(
                             MessageBubble(
                                 message = message,
                                 showToolCalls = uiState.showToolCalls,
-                                showReasoning = uiState.showReasoning
+                                showReasoning = uiState.showReasoning,
+                                onImageClick = { previewImageUri = it }
                             )
                         }
                     }
@@ -317,7 +352,8 @@ fun ChatScreen(
                 sendEnabled = uiState.canSend,
                 selectedImages = uiState.selectedImages,
                 onImagesSelected = viewModel::onImagesSelected,
-                onRemoveImage = viewModel::removeSelectedImage
+                onRemoveImage = viewModel::removeSelectedImage,
+                onImageClick = { previewImageUri = it.toString() }
             )
         }
     }

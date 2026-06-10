@@ -43,7 +43,8 @@ import com.seina.chan.ui.theme.TextStyles
 fun MessageBubble(
     message: ChatMessage,
     showToolCalls: Boolean = true,
-    showReasoning: Boolean = true
+    showReasoning: Boolean = true,
+    onImageClick: ((String) -> Unit)? = null
 ) {
     val isUser = message.role == "user"
     val effectiveShowToolCalls = showToolCalls && !isUser
@@ -97,7 +98,12 @@ fun MessageBubble(
                                 contentDescription = "图片",
                                 modifier = Modifier
                                     .sizeIn(maxWidth = 240.dp, maxHeight = 240.dp)
-                                    .clip(AppShapes.md),
+                                    .clip(AppShapes.md)
+                                    .then(
+                                        if (onImageClick != null) {
+                                            Modifier.clickable { onImageClick(imageModel) }
+                                        } else Modifier
+                                    ),
                                 contentScale = ContentScale.Crop
                             )
                         }

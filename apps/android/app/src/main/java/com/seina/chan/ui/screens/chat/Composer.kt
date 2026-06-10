@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,7 +54,8 @@ fun Composer(
     inputEnabled: Boolean = true,
     selectedImages: List<Uri> = emptyList(),
     onImagesSelected: (List<Uri>) -> Unit = {},
-    onRemoveImage: (Uri) -> Unit = {}
+    onRemoveImage: (Uri) -> Unit = {},
+    onImageClick: ((Uri) -> Unit)? = null
 ) {
     // 多图选择器启动器
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -85,7 +87,12 @@ fun Composer(
                             modifier = Modifier
                                 .size(64.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.outline),
+                                .background(MaterialTheme.colorScheme.outline)
+                                .then(
+                                    if (onImageClick != null) {
+                                        Modifier.clickable { onImageClick(uri) }
+                                    } else Modifier
+                                ),
                             contentScale = ContentScale.Crop
                         )
                         // 移除按钮
