@@ -163,12 +163,14 @@ class SessionRepository(
     }
 
     /**
-     * 解析消息内容中的图片残留文字 `[User sent an image at: /path]`，
-     * 尝试从本地 Room 缓存查询对应的 content:// URI。
+     * 解析消息内容中的图片残留文字，尝试从本地 Room 缓存查询对应的 content:// URI。
+     * 服务端实际存储格式如：
+     *   [You can examine it with vision_analyze using image_url: /path]
+     *   [You can examine it with vision_analyze using image_urls: ["/path"]]
      * 有缓存则返回空内容 + imageUrl；无缓存则替换为 📷 图片 占位符。
      */
     private suspend fun parseImageContent(content: String): Pair<String, String?> {
-        val regex = Regex("""\[User sent an image at: ([^\]]+)\]""")
+        val regex = Regex("""image_url[s]?:\s*\[?"?(/[^\]\s"]*\.hermes/images/[^\]\s"]+)""")
         val match = regex.find(content)
         if (match != null) {
             val serverPath = match.groupValues[1].trim()

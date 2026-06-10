@@ -8,7 +8,8 @@ data class ChatMessage(
     val reasoningText: String = "",
     val isReasoning: Boolean = false,
     val toolCalls: List<ToolCallDetail> = emptyList(),
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val systemEvents: List<String> = emptyList()
 )
 
 data class ToolCallDetail(

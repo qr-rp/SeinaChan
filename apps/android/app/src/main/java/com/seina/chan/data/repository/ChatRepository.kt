@@ -266,6 +266,20 @@ class ChatRepository(
                     )
                     appendToolCallToStreamingMessage(toolCall)
                 }
+                is GatewayEvent.ReviewSummary -> {
+                    val messages = _messages.value.toMutableList()
+                    val index = messages.indexOfLast { it.role == "assistant" }
+                    if (index >= 0) {
+                        val msg = messages[index]
+                        messages[index] = msg.copy(
+                            systemEvents = msg.systemEvents + event.text
+                        )
+                        _messages.value = messages
+                        FileLogger.i("ChatRepository", "ReviewSummary appended: ${event.text}")
+                    } else {
+                        FileLogger.w("ChatRepository", "ReviewSummary received but no assistant message found")
+                    }
+                }
                 else -> Unit
             }
         } catch (e: Exception) {

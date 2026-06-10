@@ -56,15 +56,6 @@ fun MessageBubble(
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Top
     ) {
-        if (!isUser) {
-            Avatar(
-                text = "★",
-                backgroundColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-        }
-
         Column(
             horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -120,16 +111,22 @@ fun MessageBubble(
                     }
                 }
             }
-        }
 
-        if (isUser) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Avatar(
-                text = "🙂",
-                backgroundColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.onBackground,
-                borderColor = MaterialTheme.colorScheme.outline
-            )
+            // 系统事件（如 Memory updated / Skill created 等）
+            if (message.systemEvents.isNotEmpty()) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    message.systemEvents.forEach { eventText ->
+                        Text(
+                            text = eventText,
+                            style = TextStyles.label,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -200,32 +197,4 @@ private fun isImageContent(content: String): Boolean {
     val cleanUrl = content.substringBefore("?").substringBefore("#")
     return cleanUrl.startsWith("http") &&
            listOf(".jpg", ".jpeg", ".png", ".gif", ".webp").any { cleanUrl.endsWith(it, ignoreCase = true) }
-}
-
-@Composable
-private fun Avatar(
-    text: String,
-    backgroundColor: Color,
-    contentColor: Color,
-    borderColor: Color? = null
-) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .background(backgroundColor, shape = CircleShape)
-            .then(
-                if (borderColor != null) {
-                    Modifier.border(1.dp, borderColor, CircleShape)
-                } else {
-                    Modifier
-                }
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            color = contentColor,
-            style = TextStyles.bodyMd
-        )
-    }
 }

@@ -110,6 +110,12 @@ sealed class GatewayEvent {
     ) : GatewayEvent()
 
     @Serializable
+    @SerialName("review.summary")
+    data class ReviewSummary(
+        val text: String
+    ) : GatewayEvent()
+
+    @Serializable
     @SerialName("error")
     data class ErrorEvent(
         val message: String
@@ -134,6 +140,7 @@ object GatewayEventSerializer : JsonContentPolymorphicSerializer<GatewayEvent>(G
             "approval.request" -> GatewayEvent.ApprovalRequest.serializer()
             "clarify.request" -> GatewayEvent.ClarifyRequest.serializer()
             "secret.request" -> GatewayEvent.SecretRequest.serializer()
+            "review.summary" -> GatewayEvent.ReviewSummary.serializer()
             "error" -> GatewayEvent.ErrorEvent.serializer()
             else -> throw IllegalArgumentException("Unknown event type: $event")
         }
