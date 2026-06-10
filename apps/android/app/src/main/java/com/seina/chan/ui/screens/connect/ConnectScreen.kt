@@ -1,0 +1,228 @@
+package com.seina.chan.ui.screens.connect
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.seina.chan.ui.theme.AppShapes
+import com.seina.chan.ui.theme.Canvas
+import com.seina.chan.ui.theme.ErrorColor
+import com.seina.chan.ui.theme.Hairline
+import com.seina.chan.ui.theme.Ink
+import com.seina.chan.ui.theme.InkLight
+import com.seina.chan.ui.theme.Muted
+import com.seina.chan.ui.theme.MutedSoft
+import com.seina.chan.ui.theme.Primary
+import com.seina.chan.ui.theme.PrimaryDisabled
+import com.seina.chan.ui.theme.Spacing
+import com.seina.chan.ui.theme.Success
+import com.seina.chan.ui.theme.TextStyles
+
+@Composable
+fun ConnectScreen(
+    onConnected: () -> Unit = {},
+    viewModel: ConnectViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.navigateToChat.collect { success ->
+            if (success) {
+                onConnected()
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Canvas)
+            .safeDrawingPadding()
+            .padding(horizontal = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 400.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "口袋星奈 v0.1.0",
+                style = TextStyles.displayLg
+            )
+
+            Spacer(modifier = Modifier.height(Spacing.xl))
+
+            OutlinedTextField(
+                value = uiState.ip,
+                onValueChange = viewModel::onIpChange,
+                label = { Text("WSL IP 地址") },
+                placeholder = { Text("127.0.0.1") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isLoading,
+                singleLine = true,
+                shape = AppShapes.md,
+                colors = outlinedTextFieldColors()
+            )
+
+            Spacer(modifier = Modifier.height(Spacing.md))
+
+            OutlinedTextField(
+                value = uiState.port,
+                onValueChange = viewModel::onPortChange,
+                label = { Text("端口") },
+                placeholder = { Text("9119") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isLoading,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = AppShapes.md,
+                colors = outlinedTextFieldColors()
+            )
+
+            Spacer(modifier = Modifier.height(Spacing.md))
+
+            OutlinedTextField(
+                value = uiState.token,
+                onValueChange = viewModel::onTokenChange,
+                label = { Text("Token (可选)") },
+                placeholder = { Text("留空则使用默认认证") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isLoading,
+                singleLine = true,
+                shape = AppShapes.md,
+                colors = outlinedTextFieldColors()
+            )
+
+            Spacer(modifier = Modifier.height(Spacing.md))
+
+            OutlinedButton(
+                onClick = viewModel::testConnection,
+                enabled = !uiState.isLoading,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Ink,
+                    disabledContentColor = Muted
+                ),
+                border = BorderStroke(1.dp, Hairline)
+            ) {
+                Text("测试连接")
+            }
+
+            when (val status = uiState.testStatus) {
+                is TestStatus.Testing -> {
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    Text(
+                        text = "测试中...",
+                        style = TextStyles.bodySm,
+                        color = InkLight,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                is TestStatus.Success -> {
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    Text(
+                        text = "✅ ${status.message}",
+                        style = TextStyles.bodySm,
+                        color = Success,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                is TestStatus.Error -> {
+                    Spacer(modifier = Modifier.height(Spacing.xs))
+                    Text(
+                        text = status.message,
+                        style = TextStyles.bodySm,
+                        color = ErrorColor,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                else -> {}
+            }
+
+            if (uiState.error != null) {
+                Spacer(modifier = Modifier.height(Spacing.sm))
+                Text(
+                    text = uiState.error!!,
+                    style = TextStyles.bodySm,
+                    color = ErrorColor,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(Spacing.sm))
+                TextButton(
+                    onClick = viewModel::clearSavedConfig,
+                    colors = ButtonDefaults.textButtonColors(contentColor = ErrorColor)
+                ) {
+                    Text("清除配置并重新输入")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.lg))
+
+            Button(
+                onClick = viewModel::connect,
+                enabled = !uiState.isLoading,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Primary,
+                    contentColor = Color.White,
+                    disabledContainerColor = PrimaryDisabled,
+                    disabledContentColor = Muted
+                ),
+                shape = AppShapes.md
+            ) {
+                Text(if (uiState.isLoading) "连接中..." else "保存并连接")
+            }
+
+            Spacer(modifier = Modifier.height(Spacing.xl))
+
+            Text(
+                text = "配置 Hermes Dashboard 连接信息",
+                style = TextStyles.caption,
+                color = InkLight
+            )
+        }
+    }
+}
+
+@Composable
+private fun outlinedTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = Canvas,
+    unfocusedContainerColor = Canvas,
+    focusedBorderColor = Primary,
+    unfocusedBorderColor = Hairline,
+    focusedTextColor = Ink,
+    unfocusedTextColor = Ink,
+    cursorColor = Primary,
+    focusedLabelColor = Primary,
+    unfocusedLabelColor = Muted,
+    focusedPlaceholderColor = MutedSoft,
+    unfocusedPlaceholderColor = MutedSoft
+)
