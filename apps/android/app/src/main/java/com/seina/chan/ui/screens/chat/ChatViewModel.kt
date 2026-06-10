@@ -80,6 +80,11 @@ class ChatViewModel @Inject constructor(
                 _inputState.update { it.copy(showReasoning = value) }
             }
         }
+        viewModelScope.launch {
+            settingsRepository.hiddenToolNames.collect { value ->
+                _inputState.update { it.copy(hiddenToolNames = value) }
+            }
+        }
     }
 
     val uiState: StateFlow<ChatUiState> = combine(

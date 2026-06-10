@@ -11,5 +11,6 @@ data class ChatUiState(
     val error: String? = null,
     val selectedImages: List<Uri> = emptyList(),
     val showToolCalls: Boolean = true,
-    val showReasoning: Boolean = true
+    val showReasoning: Boolean = true,
+    val hiddenToolNames: Set<String> = emptySet()
 )

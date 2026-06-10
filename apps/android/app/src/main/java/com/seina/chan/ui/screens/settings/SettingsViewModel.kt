@@ -21,7 +21,8 @@ data class SettingsUiState(
     val autoExpandTools: Boolean = false,
     val connectionIp: String = "",
     val connectionPort: String = "",
-    val connectionToken: String = ""
+    val connectionToken: String = "",
+    val hiddenToolNames: Set<String> = emptySet()
 )
 
 @HiltViewModel
@@ -84,6 +85,11 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(connectionToken = value) }
             }
         }
+        viewModelScope.launch {
+            settingsRepository.hiddenToolNames.collect { value ->
+                _uiState.update { it.copy(hiddenToolNames = value) }
+            }
+        }
     }
 
     fun setPageSize(value: Int) {
@@ -143,6 +149,12 @@ class SettingsViewModel @Inject constructor(
     fun setConnectionToken(value: String) {
         viewModelScope.launch {
             settingsRepository.setConnectionToken(value)
+        }
+    }
+
+    fun setHiddenToolNames(value: Set<String>) {
+        viewModelScope.launch {
+            settingsRepository.setHiddenToolNames(value)
         }
     }
 

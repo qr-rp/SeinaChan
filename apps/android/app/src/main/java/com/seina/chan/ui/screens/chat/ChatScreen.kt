@@ -323,6 +323,7 @@ fun ChatScreen(
                                 message = message,
                                 showToolCalls = uiState.showToolCalls,
                                 showReasoning = uiState.showReasoning,
+                                hiddenToolNames = uiState.hiddenToolNames,
                                 onImageClick = { previewImageUri = it }
                             )
                         }

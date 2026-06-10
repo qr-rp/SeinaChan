@@ -1,13 +1,17 @@
 package com.seina.chan.ui.screens.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -20,8 +24,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -33,8 +39,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -115,6 +123,12 @@ fun SettingsScreen(
                     description = "在消息旁显示发送时间",
                     checked = uiState.showTimestamps,
                     onCheckedChange = viewModel::setShowTimestamps
+                )
+            }
+            item {
+                ToolVisibilitySettingItem(
+                    hiddenToolNames = uiState.hiddenToolNames,
+                    onHiddenToolsChange = viewModel::setHiddenToolNames
                 )
             }
             item {
@@ -314,6 +328,160 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+private val TOOL_CATEGORIES = listOf(
+    "基础工具" to listOf(
+        "terminal", "execute_code", "read_file", "write_file", "search_files", "patch",
+        "process", "todo", "delegate_task", "deep_research", "cronjob", "memory",
+        "session_search", "clarify", "send_message", "mixture_of_agents"
+    ),
+    "Web/搜索" to listOf("web_search", "web_extract", "x_search"),
+    "音视频/图像" to listOf(
+        "vision_analyze", "video_analyze", "video_generate", "image_generate",
+        "audio_transcribe", "text_to_speech"
+    ),
+    "浏览器" to listOf(
+        "browser_navigate", "browser_click", "browser_type", "browser_scroll",
+        "browser_snapshot", "browser_back", "browser_press", "browser_console",
+        "browser_dialog", "browser_get_images", "browser_cdp", "browser_vision"
+    ),
+    "技能/插件" to listOf(
+        "skill_view", "skill_manage", "skills_list", "novel_search", "novel_info",
+        "novel_chapters", "novel_read", "novel_download", "comic_search",
+        "comic_analyze", "comic_download"
+    ),
+    "Home Assistant" to listOf("ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service"),
+    "看板" to listOf(
+        "kanban_list", "kanban_show", "kanban_create", "kanban_comment",
+        "kanban_complete", "kanban_block", "kanban_unblock", "kanban_heartbeat", "kanban_link"
+    ),
+    "飞书" to listOf(
+        "feishu_doc_read", "feishu_drive_list_comments", "feishu_drive_add_comment",
+        "feishu_drive_list_comment_replies", "feishu_drive_reply_comment"
+    ),
+    "社交" to listOf(
+        "discord", "discord_admin", "yb_query_group_info", "yb_query_group_members",
+        "yb_search_sticker", "yb_send_dm", "yb_send_sticker"
+    ),
+    "计算机控制" to listOf("computer_use")
+)
+
+@Composable
+private fun ToolVisibilitySettingItem(
+    hiddenToolNames: Set<String>,
+    onHiddenToolsChange: (Set<String>) -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    ListItem(
+        headlineContent = {
+            Text(
+                text = "自定义隐藏工具链",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        },
+        supportingContent = {
+            val hiddenCount = hiddenToolNames.size
+            Text(
+                text = if (hiddenCount == 0) "未隐藏任何工具" else "已隐藏 ${hiddenCount} 个工具",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        },
+        modifier = Modifier.clickable { showDialog = true }
+    )
+
+    if (showDialog) {
+        var searchQuery by remember { mutableStateOf("") }
+        var localHidden by remember { mutableStateOf(hiddenToolNames) }
+
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("隐藏指定工具链") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        label = { Text("搜索工具") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp)
+                    ) {
+                        val query = searchQuery.trim().lowercase()
+                        TOOL_CATEGORIES.forEach { (category, tools) ->
+                            val filteredTools = if (query.isEmpty()) {
+                                tools
+                            } else {
+                                tools.filter { it.lowercase().contains(query) }
+                            }
+                            if (filteredTools.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = category,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(vertical = Spacing.xs)
+                                    )
+                                }
+                                items(filteredTools, key = { it }) { tool ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                localHidden = if (tool in localHidden) {
+                                                    localHidden - tool
+                                                } else {
+                                                    localHidden + tool
+                                                }
+                                            }
+                                            .padding(vertical = 4.dp)
+                                    ) {
+                                        Checkbox(
+                                            checked = tool in localHidden,
+                                            onCheckedChange = { checked ->
+                                                localHidden = if (checked) {
+                                                    localHidden + tool
+                                                } else {
+                                                    localHidden - tool
+                                                }
+                                            }
+                                        )
+                                        Text(
+                                            text = tool,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onBackground
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onHiddenToolsChange(localHidden)
+                    showDialog = false
+                }) {
+                    Text("确定")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 

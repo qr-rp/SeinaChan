@@ -45,6 +45,7 @@ fun MessageBubble(
     message: ChatMessage,
     showToolCalls: Boolean = true,
     showReasoning: Boolean = true,
+    hiddenToolNames: Set<String> = emptySet(),
     onImageClick: ((String) -> Unit)? = null
 ) {
     val isUser = message.role == "user"
@@ -70,9 +71,10 @@ fun MessageBubble(
                 )
             }
 
-            // 工具调用卡片列表（仅 assistant 消息显示）
+            // 工具调用卡片列表（仅 assistant 消息显示，过滤隐藏的工具）
             if (effectiveShowToolCalls) {
-                message.toolCalls.forEach { toolCall ->
+                val visibleCalls = message.toolCalls.filter { it.name !in hiddenToolNames }
+                visibleCalls.forEach { toolCall ->
                     key(toolCall.id) {
                         ToolCallCard(toolCall = toolCall)
                     }

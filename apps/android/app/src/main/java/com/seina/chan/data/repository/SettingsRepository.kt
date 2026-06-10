@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -23,6 +24,7 @@ class SettingsRepository(
     val connectionIp: Flow<String> = dataStore.data.map { it[CONNECTION_IP_KEY] ?: "" }
     val connectionPort: Flow<String> = dataStore.data.map { it[CONNECTION_PORT_KEY] ?: "" }
     val connectionToken: Flow<String> = dataStore.data.map { it[CONNECTION_TOKEN_KEY] ?: "" }
+    val hiddenToolNames: Flow<Set<String>> = dataStore.data.map { it[HIDDEN_TOOL_NAMES_KEY] ?: emptySet() }
 
     suspend fun setPageSize(value: Int) {
         dataStore.edit { prefs ->
@@ -84,6 +86,12 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setHiddenToolNames(value: Set<String>) {
+        dataStore.edit { prefs ->
+            prefs[HIDDEN_TOOL_NAMES_KEY] = value
+        }
+    }
+
     companion object {
         private val PAGE_SIZE_KEY = intPreferencesKey("page_size")
         private val SHOW_TOOL_CALLS_KEY = booleanPreferencesKey("show_tool_calls")
@@ -95,5 +103,6 @@ class SettingsRepository(
         private val CONNECTION_IP_KEY = stringPreferencesKey("ip")
         private val CONNECTION_PORT_KEY = stringPreferencesKey("port")
         private val CONNECTION_TOKEN_KEY = stringPreferencesKey("token")
+        private val HIDDEN_TOOL_NAMES_KEY = stringSetPreferencesKey("hidden_tool_names")
     }
 }
