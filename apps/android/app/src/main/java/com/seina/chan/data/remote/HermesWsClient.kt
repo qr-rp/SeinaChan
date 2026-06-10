@@ -290,17 +290,12 @@ class HermesWsClient(
                 text = payload?.get("text")?.jsonPrimitive?.content ?: ""
             )
             "tool.complete" -> {
-                // result 可能是 JSON 对象/数组，需要转为字符串
+                // result 直接作为 JsonElement 传递，由 ChatRepository 负责序列化展示
                 val resultElement = payload?.get("result")
-                val resultString = when {
-                    resultElement == null -> ""
-                    resultElement is JsonPrimitive -> resultElement.jsonPrimitive.content
-                    else -> resultElement.toString()
-                }
                 GatewayEvent.ToolComplete(
                     toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
                     name = payload?.get("name")?.jsonPrimitive?.content ?: "",
-                    result = resultString,
+                    result = resultElement,
                     duration = payload?.get("duration_s")?.jsonPrimitive?.content?.toFloatOrNull(),
                     summary = payload?.get("summary")?.jsonPrimitive?.content ?: ""
                 )

@@ -5,6 +5,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
+import androidx.room.Room
+import com.seina.chan.data.local.AppDatabase
+import com.seina.chan.data.local.dao.SentImageDao
 import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.data.repository.ChatRepository
@@ -92,19 +95,37 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+        return Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            "seina_chan_db"
+        ).build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSentImageDao(database: AppDatabase): SentImageDao {
+        return database.sentImageDao()
+    }
+
+    @Provides
+    @Singleton
     fun provideSessionRepository(
         apiService: HermesApiService,
-        wsClient: HermesWsClient
+        wsClient: HermesWsClient,
+        sentImageDao: SentImageDao
     ): SessionRepository {
-        return SessionRepository(apiService, wsClient)
+        return SessionRepository(apiService, wsClient, sentImageDao)
     }
 
     @Provides
     @Singleton
     fun provideChatRepository(
-        wsClient: HermesWsClient
+        wsClient: HermesWsClient,
+        sentImageDao: SentImageDao
     ): ChatRepository {
-        return ChatRepository(wsClient)
+        return ChatRepository(wsClient, sentImageDao)
     }
 
     @Provides

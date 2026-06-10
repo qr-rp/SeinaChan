@@ -3,6 +3,8 @@ package com.seina.chan.data.repository
 import android.content.ContentResolver
 import android.net.Uri
 import android.util.Base64
+import com.seina.chan.data.local.dao.SentImageDao
+import com.seina.chan.data.local.entity.SentImageEntity
 import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.data.model.ToolCallDetail
 import com.seina.chan.data.model.ToolCallStatus
@@ -18,11 +20,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 class ChatRepository(
-    private val wsClient: HermesWsClient
+    private val wsClient: HermesWsClient,
+    private val sentImageDao: SentImageDao
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -99,7 +104,18 @@ class ChatRepository(
             put("data", dataUri)
             put("name", "image.jpg")
         }
-        wsClient.request("image.attach_bytes", params)
+        val result = wsClient.request("image.attach_bytes", params)
+        if (result is JsonObject) {
+            val serverPath = result["path"]?.jsonPrimitive?.content
+            if (serverPath != null) {
+                sentImageDao.insert(
+                    SentImageEntity(
+                        serverPath = serverPath,
+                        localUri = imageUri.toString()
+                    )
+                )
+            }
+        }
     }
 
     suspend fun respondApproval(requestId: String, approved: Boolean) {
@@ -139,9 +155,12 @@ class ChatRepository(
             when (event) {
                 is GatewayEvent.MessageStart -> {
                     // 结束所有已有的 assistant streaming 消息，避免服务器发送多个 message.start 时积累空消息
+                    // 同时将该消息中仍在 Running 的工具调用标记为完成（兼容 Server 未发送 tool.complete 的情况）
                     _messages.value = _messages.value.map {
                         if (it.isStreaming && it.role == "assistant") {
-                            it.copy(isStreaming = false, isReasoning = false)
+                            finalizeToolCallsInMessage(
+                                it.copy(isStreaming = false, isReasoning = false)
+                            )
                         } else it
                     }
                     val msgId = event.id.ifBlank { java.util.UUID.randomUUID().toString() }
@@ -164,10 +183,12 @@ class ChatRepository(
                     val index = messages.indexOfLast { it.isStreaming && it.role == "assistant" }
                     if (index >= 0) {
                         val msg = messages[index]
-                        messages[index] = msg.copy(
-                            isStreaming = false,
-                            isReasoning = false,
-                            reasoningText = event.reasoning.ifBlank { msg.reasoningText }
+                        messages[index] = finalizeToolCallsInMessage(
+                            msg.copy(
+                                isStreaming = false,
+                                isReasoning = false,
+                                reasoningText = event.reasoning.ifBlank { msg.reasoningText }
+                            )
                         )
                         _messages.value = messages
                     }
@@ -182,10 +203,11 @@ class ChatRepository(
                     updateLastStreamingAssistantMessage { it.copy(reasoningText = event.text) }
                 }
                 is GatewayEvent.ToolStart -> {
+                    val displayArgs = event.context.ifBlank { event.args }.ifBlank { event.name }
                     val toolCall = ToolCallDetail(
                         id = event.toolId,
                         name = event.name,
-                        args = event.args,
+                        args = displayArgs,
                         status = ToolCallStatus.Running
                     )
                     appendToolCallToStreamingMessage(toolCall)
@@ -194,13 +216,34 @@ class ChatRepository(
                     updateToolCall(event.toolId) { it.copy(result = it.result + event.text) }
                 }
                 is GatewayEvent.ToolComplete -> {
-                    updateToolCall(event.toolId) {
-                        it.copy(
+                    val resultText = when (val r = event.result) {
+                        is kotlinx.serialization.json.JsonPrimitive -> r.content
+                        is kotlinx.serialization.json.JsonArray -> r.joinToString("\n") { it.toString() }
+                        is kotlinx.serialization.json.JsonObject -> r.entries.joinToString("\n") { "${it.key}: ${it.value}" }
+                        else -> r?.toString() ?: ""
+                    }
+                    val found = _messages.value.any { msg -> msg.toolCalls.any { it.id == event.toolId } }
+                    if (found) {
+                        updateToolCall(event.toolId) {
+                            it.copy(
+                                status = ToolCallStatus.Success,
+                                result = resultText,
+                                duration = event.duration,
+                                summary = event.summary
+                            )
+                        }
+                    } else {
+                        // Server 可能未发送 tool.start（progress disabled），直接创建并追加
+                        val toolCall = ToolCallDetail(
+                            id = event.toolId,
+                            name = event.name,
+                            args = event.name,
                             status = ToolCallStatus.Success,
-                            result = event.result,
+                            result = resultText,
                             duration = event.duration,
                             summary = event.summary
                         )
+                        appendToolCallToStreamingMessage(toolCall)
                     }
                 }
                 is GatewayEvent.ApprovalRequest -> {
@@ -242,5 +285,21 @@ class ChatRepository(
                 if (it.id == id) transform(it) else it
             })
         }
+    }
+
+    /**
+     * 将消息中所有仍在 Running 状态的工具调用标记为完成。
+     * 用于兼容 Server 在 tool_progress 关闭时不发送 tool.complete 的情况。
+     */
+    private fun finalizeToolCallsInMessage(msg: ChatMessage): ChatMessage {
+        val finalized = msg.toolCalls.map {
+            if (it.status == ToolCallStatus.Running) {
+                it.copy(
+                    status = ToolCallStatus.Success,
+                    result = it.result.ifBlank { "已完成" }
+                )
+            } else it
+        }
+        return msg.copy(toolCalls = finalized)
     }
 }

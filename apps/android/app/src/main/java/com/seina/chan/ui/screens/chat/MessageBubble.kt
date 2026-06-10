@@ -46,22 +46,40 @@ fun MessageBubble(
     showReasoning: Boolean = true
 ) {
     val isUser = message.role == "user"
-    Row(
+    val effectiveShowToolCalls = showToolCalls && !isUser
+    val effectiveShowReasoning = showReasoning && !isUser
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        if (!isUser) {
-            Avatar(
-                text = "★",
-                backgroundColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White
+        // 思考链面板（仅 assistant 消息显示，位于消息气泡上方）
+        if (effectiveShowReasoning && (message.isReasoning || message.reasoningText.isNotBlank())) {
+            ReasoningPanel(
+                reasoningText = message.reasoningText,
+                isReasoning = message.isReasoning,
+                modifier = Modifier
+                    .padding(bottom = 8.dp)
+                    .padding(start = 44.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
         }
 
-        Column(horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
+        // 消息气泡行（包含 Avatar）
+        Row(
+            horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+            verticalAlignment = Alignment.Top
+        ) {
+            if (!isUser) {
+                Avatar(
+                    text = "★",
+                    backgroundColor = MaterialTheme.colorScheme.primary,
+                    contentColor = Color.White
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
             Box(
                 modifier = Modifier
                     .background(
@@ -96,36 +114,29 @@ fun MessageBubble(
                 }
             }
 
-            // 思考链面板（仅 assistant 消息显示）
-            if (showReasoning && !isUser && (message.isReasoning || message.reasoningText.isNotBlank())) {
-                ReasoningPanel(
-                    reasoningText = message.reasoningText,
-                    isReasoning = message.isReasoning,
-                    modifier = Modifier.padding(top = 8.dp)
+            if (isUser) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Avatar(
+                    text = "🙂",
+                    backgroundColor = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    borderColor = MaterialTheme.colorScheme.outline
                 )
-            }
-
-            // 工具调用卡片列表
-            if (showToolCalls) {
-                message.toolCalls.forEach { toolCall ->
-                    key(toolCall.id) {
-                        ToolCallCard(
-                            toolCall = toolCall,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
-                }
             }
         }
 
-        if (isUser) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Avatar(
-                text = "🙂",
-                backgroundColor = MaterialTheme.colorScheme.background,
-                contentColor = MaterialTheme.colorScheme.onBackground,
-                borderColor = MaterialTheme.colorScheme.outline
-            )
+        // 工具调用卡片列表（仅 assistant 消息显示）
+        if (effectiveShowToolCalls) {
+            message.toolCalls.forEach { toolCall ->
+                key(toolCall.id) {
+                    ToolCallCard(
+                        toolCall = toolCall,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .padding(start = 44.dp)
+                    )
+                }
+            }
         }
     }
 }

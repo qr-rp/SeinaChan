@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -207,6 +208,7 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
+                .systemBarsPadding()
                 .imePadding()
         ) {
             // Top bar
@@ -269,8 +271,7 @@ fun ChatScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .padding(horizontal = Spacing.md),
-                    contentAlignment = Alignment.BottomCenter
+                        .padding(horizontal = Spacing.md)
                 ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth(),

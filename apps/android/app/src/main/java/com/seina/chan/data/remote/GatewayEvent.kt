@@ -66,7 +66,8 @@ sealed class GatewayEvent {
     data class ToolStart(
         val toolId: String,
         val name: String,
-        val args: String = ""
+        val args: String = "",
+        val context: String = ""
     ) : GatewayEvent()
 
     @Serializable
@@ -81,7 +82,7 @@ sealed class GatewayEvent {
     data class ToolComplete(
         val toolId: String,
         val name: String,
-        val result: String = "",
+        val result: JsonElement? = null,
         val duration: Float? = null,
         val summary: String = ""
     ) : GatewayEvent()
