@@ -17,13 +17,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.seina.chan.data.model.Session
+import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.AppShapes
-import com.seina.chan.ui.theme.Hairline
-import com.seina.chan.ui.theme.Ink
-import com.seina.chan.ui.theme.InkLight
-import com.seina.chan.ui.theme.Primary
 import com.seina.chan.ui.theme.Spacing
-import com.seina.chan.ui.theme.SurfaceCard
 import com.seina.chan.ui.theme.TextStyles
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -42,7 +38,7 @@ fun SessionListItem(
                 elevation = if (isSelected) 2.dp else 0.dp,
                 shape = AppShapes.md
             )
-            .background(if (isSelected) SurfaceCard else Color.Transparent)
+            .background(if (isSelected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -52,26 +48,26 @@ fun SessionListItem(
             Text(
                 text = session.title ?: "新会话",
                 style = TextStyles.bodyMd,
-                color = Ink
+                color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.height(Spacing.xs))
             Text(
                 text = session.preview ?: "无消息",
                 style = TextStyles.bodySm,
-                color = InkLight
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(Spacing.xs))
             Row(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = session.lastActiveAt ?: "",
                     style = TextStyles.caption,
-                    color = InkLight,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = "${session.messageCount}",
                     style = TextStyles.caption,
-                    color = Primary
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -80,7 +76,7 @@ fun SessionListItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(Hairline)
+                    .background(MaterialTheme.colorScheme.outline)
             )
         }
     }

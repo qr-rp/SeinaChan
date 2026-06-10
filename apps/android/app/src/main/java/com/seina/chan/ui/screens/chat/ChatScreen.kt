@@ -8,10 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +21,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
@@ -46,11 +45,7 @@ import com.seina.chan.util.FileLogger
 import com.seina.chan.ui.components.dialogs.ClarifyDialog
 import com.seina.chan.ui.components.dialogs.SecretDialog
 import com.seina.chan.ui.screens.sessions.SessionListScreen
-import com.seina.chan.ui.theme.Canvas
-import com.seina.chan.ui.theme.Ink
-import com.seina.chan.ui.theme.Primary
 import com.seina.chan.ui.theme.Spacing
-import com.seina.chan.ui.theme.SurfaceCard
 import com.seina.chan.ui.theme.TextStyles
 import kotlinx.coroutines.launch
 
@@ -72,11 +67,8 @@ fun ChatScreen(
     val pendingClarify = remember { mutableStateOf<GatewayEvent.ClarifyRequest?>(null) }
     val pendingSecret = remember { mutableStateOf<GatewayEvent.SecretRequest?>(null) }
 
-    val imePaddingBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-    val isKeyboardVisible = imePaddingBottom > 0.dp
-
-    // 消息数量变化或键盘弹出时自动滚动到底部
-    LaunchedEffect(uiState.messages.size, isKeyboardVisible) {
+    // 消息数量变化时自动滚动到最新消息
+    LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
         }
@@ -91,14 +83,22 @@ fun ChatScreen(
     LaunchedEffect(Unit) {
         if (currentSessionId.isEmpty()) {
             scope.launch {
-                currentSessionId = viewModel.ensureSession()
+                try {
+                    currentSessionId = viewModel.ensureSession()
+                } catch (e: Exception) {
+                    FileLogger.e("ChatScreen", "ensureSession failed", e)
+                }
             }
         } else {
             scope.launch {
-                val result = viewModel.resumeSessionWithId(currentSessionId)
-                if (result.isFailure) {
-                    FileLogger.w("ChatScreen", "resumeSession failed, will create new")
-                    currentSessionId = viewModel.ensureSession()
+                try {
+                    val result = viewModel.resumeSessionWithId(currentSessionId)
+                    if (result.isFailure) {
+                        FileLogger.w("ChatScreen", "resumeSession failed, will create new")
+                        currentSessionId = viewModel.ensureSession()
+                    }
+                } catch (e: Exception) {
+                    FileLogger.e("ChatScreen", "resumeSession failed", e)
                 }
             }
         }
@@ -168,13 +168,13 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(0.8f)
-                    .background(SurfaceCard)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Text(
                         text = "会话",
                         style = TextStyles.displaySm,
-                        color = Ink,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(Spacing.md)
                     )
                     SessionListScreen(
@@ -206,7 +206,8 @@ fun ChatScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Canvas)
+                .background(MaterialTheme.colorScheme.background)
+                .imePadding()
         ) {
             // Top bar
             Row(
@@ -219,14 +220,14 @@ fun ChatScreen(
                     Icon(
                         imageVector = Icons.Default.Menu,
                         contentDescription = "菜单",
-                        tint = Ink
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = title,
                     style = TextStyles.bodyMd,
-                    color = Ink,
+                    color = MaterialTheme.colorScheme.onBackground,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.weight(1f))
@@ -234,7 +235,7 @@ fun ChatScreen(
                     Icon(
                         imageVector = Icons.Default.Settings,
                         contentDescription = "设置",
-                        tint = Ink
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
                 }
             }
@@ -248,33 +249,41 @@ fun ChatScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (uiState.isLoading) {
-                        androidx.compose.material3.CircularProgressIndicator(color = Primary)
+                        androidx.compose.material3.CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                     } else if (uiState.error != null) {
                         Text(
                             text = uiState.error ?: "",
                             style = TextStyles.bodyMd,
-                            color = Primary
+                            color = MaterialTheme.colorScheme.primary
                         )
                     } else {
                         Text(
                             text = "开始聊天吧",
                             style = TextStyles.bodyMd,
-                            color = Ink
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     }
                 }
             } else {
-                LazyColumn(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
                         .padding(horizontal = Spacing.md),
-                    reverseLayout = false,
-                    state = listState,
-                    contentPadding = PaddingValues(bottom = 8.dp)
+                    contentAlignment = Alignment.BottomCenter
                 ) {
-                    items(uiState.messages, key = { it.id }) { message ->
-                        MessageBubble(message = message)
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        state = listState,
+                        contentPadding = PaddingValues(bottom = 8.dp)
+                    ) {
+                        items(uiState.messages, key = { it.id }) { message ->
+                            MessageBubble(
+                                message = message,
+                                showToolCalls = uiState.showToolCalls,
+                                showReasoning = uiState.showReasoning
+                            )
+                        }
                     }
                 }
             }
@@ -285,7 +294,7 @@ fun ChatScreen(
                     Text(
                         text = error,
                         style = TextStyles.caption,
-                        color = Primary,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = Spacing.md)

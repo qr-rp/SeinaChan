@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +28,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -42,11 +42,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.seina.chan.ui.theme.AppShapes
-import com.seina.chan.ui.theme.Canvas
-import com.seina.chan.ui.theme.Hairline
-import com.seina.chan.ui.theme.Ink
-import com.seina.chan.ui.theme.MutedSoft
-import com.seina.chan.ui.theme.Primary
 import com.seina.chan.ui.theme.Spacing
 
 @Composable
@@ -69,12 +64,10 @@ fun Composer(
         }
     }
 
-    // 使用 imePadding 处理键盘高度，避免与父布局的 padding 叠加
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Canvas)
-            .imePadding()
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // 选中的图片缩略图预览
         if (selectedImages.isNotEmpty()) {
@@ -92,7 +85,7 @@ fun Composer(
                             modifier = Modifier
                                 .size(64.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Hairline),
+                                .background(MaterialTheme.colorScheme.outline),
                             contentScale = ContentScale.Crop
                         )
                         // 移除按钮
@@ -137,7 +130,7 @@ fun Composer(
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "添加图片",
-                    tint = Ink
+                    tint = MaterialTheme.colorScheme.onBackground
                 )
             }
             Spacer(modifier = Modifier.width(4.dp))
@@ -155,15 +148,15 @@ fun Composer(
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { if (sendEnabled) onSend() }),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Canvas,
-                    unfocusedContainerColor = Canvas,
-                    focusedBorderColor = Primary,
-                    unfocusedBorderColor = Hairline,
-                    focusedTextColor = Ink,
-                    unfocusedTextColor = Ink,
-                    cursorColor = Primary,
-                    focusedPlaceholderColor = MutedSoft,
-                    unfocusedPlaceholderColor = MutedSoft,
+                    focusedContainerColor = MaterialTheme.colorScheme.background,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.background,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+                    cursorColor = MaterialTheme.colorScheme.primary,
+                    focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 )
             )
 
@@ -175,9 +168,9 @@ fun Composer(
                 modifier = Modifier.size(48.dp),
                 shape = CircleShape,
                 colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = Primary,
+                    containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = Color.White,
-                    disabledContainerColor = Primary.copy(alpha = 0.5f)
+                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                 )
             ) {
                 Icon(

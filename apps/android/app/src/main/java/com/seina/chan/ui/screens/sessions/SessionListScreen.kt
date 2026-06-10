@@ -43,9 +43,7 @@ import com.seina.chan.ui.components.ConnectionStatusBar
 import com.seina.chan.ui.components.SeinaButton
 import com.seina.chan.ui.components.SeinaButtonVariant
 import com.seina.chan.ui.components.SeinaTextField
-import com.seina.chan.ui.theme.Canvas
-import com.seina.chan.ui.theme.InkLight
-import com.seina.chan.ui.theme.Primary
+import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.TextStyles
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -121,7 +119,7 @@ fun SessionListScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Canvas)
+            .background(MaterialTheme.colorScheme.background)
             .padding(vertical = Spacing.md, horizontal = Spacing.sm)
     ) {
         Row(
@@ -139,7 +137,7 @@ fun SessionListScreen(
                 Icon(
                     imageVector = Icons.Filled.Settings,
                     contentDescription = "设置",
-                    tint = InkLight
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -178,7 +176,7 @@ fun SessionListScreen(
                     Text(
                         text = if (error != null) "加载失败: $error" else "暂无历史会话",
                         style = TextStyles.bodyMd,
-                        color = InkLight
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else if (sessions.isEmpty() && isLoading) {
@@ -187,7 +185,7 @@ fun SessionListScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = Primary)
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             } else {
                 LazyColumn(
@@ -241,7 +239,7 @@ fun SessionListScreen(
                                     .padding(vertical = Spacing.md),
                                 contentAlignment = Alignment.Center
                             ) {
-                                CircularProgressIndicator(color = Primary)
+                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }

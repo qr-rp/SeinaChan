@@ -18,10 +18,9 @@ import androidx.compose.ui.window.DialogProperties
 import com.seina.chan.data.remote.GatewayEvent.ApprovalRequest
 import com.seina.chan.ui.components.SeinaButton
 import com.seina.chan.ui.components.SeinaButtonVariant
+import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.AppShapes
-import com.seina.chan.ui.theme.Ink
 import com.seina.chan.ui.theme.Spacing
-import com.seina.chan.ui.theme.SurfaceCard
 import com.seina.chan.ui.theme.TextStyles
 
 @Composable
@@ -43,13 +42,13 @@ fun ApprovalDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SurfaceCard, shape = AppShapes.lg)
+                .background(MaterialTheme.colorScheme.surfaceVariant, shape = AppShapes.lg)
                 .padding(Spacing.lg)
         ) {
             Text(
                 text = "工具调用请求",
                 style = TextStyles.bodyLg.copy(fontWeight = FontWeight.Medium),
-                color = Ink
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             Spacer(modifier = Modifier.height(Spacing.sm))
@@ -57,7 +56,7 @@ fun ApprovalDialog(
             Text(
                 text = "助手请求执行工具：${request.toolName}",
                 style = TextStyles.bodyMd,
-                color = Ink
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             Spacer(modifier = Modifier.height(Spacing.sm))
@@ -66,7 +65,7 @@ fun ApprovalDialog(
                 Text(
                     text = request.input.entries.joinToString("\n") { "${it.key}: ${it.value}" },
                     style = TextStyles.bodySm,
-                    color = Ink
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(Spacing.md))
             }

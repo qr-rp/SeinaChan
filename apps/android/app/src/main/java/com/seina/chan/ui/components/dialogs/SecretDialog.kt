@@ -26,10 +26,9 @@ import com.seina.chan.data.remote.GatewayEvent.SecretRequest
 import com.seina.chan.ui.components.SeinaButton
 import com.seina.chan.ui.components.SeinaButtonVariant
 import com.seina.chan.ui.components.SeinaTextField
+import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.AppShapes
-import com.seina.chan.ui.theme.Ink
 import com.seina.chan.ui.theme.Spacing
-import com.seina.chan.ui.theme.SurfaceCard
 import com.seina.chan.ui.theme.TextStyles
 
 @Composable
@@ -56,13 +55,13 @@ fun SecretDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SurfaceCard, shape = AppShapes.lg)
+                .background(MaterialTheme.colorScheme.surfaceVariant, shape = AppShapes.lg)
                 .padding(Spacing.lg)
         ) {
             Text(
                 text = "需要密码",
                 style = TextStyles.bodyLg.copy(fontWeight = FontWeight.Medium),
-                color = Ink
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             Spacer(modifier = Modifier.height(Spacing.sm))
@@ -70,7 +69,7 @@ fun SecretDialog(
             Text(
                 text = request.prompt,
                 style = TextStyles.bodyMd,
-                color = Ink
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             Spacer(modifier = Modifier.height(Spacing.md))

@@ -14,11 +14,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.seina.chan.ui.theme.Muted
 
 @Composable
 fun TypingIndicator() {
@@ -45,7 +45,7 @@ fun TypingIndicator() {
                 modifier = Modifier
                     .size(8.dp)
                     .offset(y = offsetY.dp)
-                    .background(Muted, shape = CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), shape = CircleShape)
             )
         }
     }

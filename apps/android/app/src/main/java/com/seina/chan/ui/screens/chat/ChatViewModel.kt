@@ -9,6 +9,7 @@ import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.data.repository.ChatRepository
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
+import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -26,6 +27,7 @@ class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val sessionRepository: SessionRepository,
     private val connectionRepository: ConnectionRepository,
+    private val settingsRepository: SettingsRepository,
     private val wsClient: HermesWsClient,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -66,6 +68,16 @@ class ChatViewModel @Inject constructor(
                     }
                 }
                 previousState = state
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.showToolCalls.collect { value ->
+                _inputState.update { it.copy(showToolCalls = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.showReasoning.collect { value ->
+                _inputState.update { it.copy(showReasoning = value) }
             }
         }
     }
@@ -187,7 +199,7 @@ class ChatViewModel @Inject constructor(
                 FileLogger.i("ChatViewModel", "sendImage() succeeded for uri=$uri")
             } catch (e: Exception) {
                 FileLogger.e("ChatViewModel", "sendImage() failed for uri=$uri", e)
-                throw e
+                // 继续发送其余图片，不中断
             }
         }
     }

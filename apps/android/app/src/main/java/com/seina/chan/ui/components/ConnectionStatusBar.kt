@@ -18,19 +18,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.AppShapes
-import com.seina.chan.ui.theme.Ink
-import com.seina.chan.ui.theme.Primary
 import com.seina.chan.ui.theme.Spacing
-import com.seina.chan.ui.theme.Success
-import com.seina.chan.ui.theme.SurfaceCard
 import com.seina.chan.ui.theme.TextStyles
 
 @Composable
 fun ConnectionStatusBar(
     status: ConnectionStatus,
     modifier: Modifier = Modifier,
-    backgroundColor: Color = SurfaceCard
+    backgroundColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val label = when (status) {
         ConnectionStatus.Connected -> "已连接"
@@ -53,14 +50,14 @@ fun ConnectionStatusBar(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(Success)
+                        .background(MaterialTheme.colorScheme.primary)
                 )
             }
 
             ConnectionStatus.Connecting -> {
                 CircularProgressIndicator(
                     modifier = Modifier.size(14.dp),
-                    color = Primary,
+                    color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 2.dp
                 )
             }
@@ -70,7 +67,7 @@ fun ConnectionStatusBar(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(Primary)
+                        .background(MaterialTheme.colorScheme.primary)
                 )
             }
         }
@@ -80,7 +77,7 @@ fun ConnectionStatusBar(
         Text(
             text = label,
             style = TextStyles.bodySm,
-            color = Ink
+            color = MaterialTheme.colorScheme.onBackground
         )
     }
 }

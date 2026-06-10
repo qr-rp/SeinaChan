@@ -10,11 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.AppShapes
-import com.seina.chan.ui.theme.Hairline
-import com.seina.chan.ui.theme.Ink
-import com.seina.chan.ui.theme.Primary
-import com.seina.chan.ui.theme.SurfaceCard
 import com.seina.chan.ui.theme.TextStyles
 
 @Composable
@@ -41,10 +38,10 @@ fun SeinaButton(
                 enabled = enabled,
                 shape = AppShapes.md,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Primary,
-                    contentColor = androidx.compose.ui.graphics.Color.White,
-                    disabledContainerColor = Primary,
-                    disabledContentColor = androidx.compose.ui.graphics.Color.White
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.primary,
+                    disabledContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 contentPadding = contentPadding
             ) {
@@ -61,12 +58,12 @@ fun SeinaButton(
                 modifier = modifier.alpha(alpha),
                 enabled = enabled,
                 shape = AppShapes.md,
-                border = BorderStroke(width = 1.dp, color = Hairline),
+                border = BorderStroke(width = 1.dp, color = MaterialTheme.colorScheme.outline),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = SurfaceCard,
-                    contentColor = Ink,
-                    disabledContainerColor = SurfaceCard,
-                    disabledContentColor = Ink
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onBackground
                 ),
                 contentPadding = contentPadding
             ) {
@@ -83,8 +80,8 @@ fun SeinaButton(
                 modifier = modifier.alpha(alpha),
                 enabled = enabled,
                 colors = ButtonDefaults.textButtonColors(
-                    contentColor = Primary,
-                    disabledContentColor = Primary
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    disabledContentColor = MaterialTheme.colorScheme.primary
                 ),
                 contentPadding = PaddingValues(0.dp)
             ) {

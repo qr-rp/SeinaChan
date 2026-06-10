@@ -35,6 +35,12 @@ val SurfaceNavy = Color(0xFF1A1D2E)
 val SurfaceNavyLight = Color(0xFF2A2E42)
 val BorderNavy = Color(0xFF3A3F5C)
 
+// === Dark Theme Surfaces ===
+val OnDark = Color(0xFFFAF9F5)
+val OnDarkSoft = Color(0xFFA09D96)
+val SurfaceDarkElevated = Color(0xFF252320)
+val SurfaceDarkSoft = Color(0xFF1F1E1B)
+
 // === Semantic ===
 val Success = Color(0xFF5db872)
 val ErrorColor = Color(0xFFc64545)
@@ -87,12 +93,12 @@ val DarkColorScheme = darkColorScheme(
     tertiaryContainer = SurfaceCoralLight,
     onTertiaryContainer = Ink,
     background = SurfaceDark,
-    onBackground = CodeText,
+    onBackground = OnDark,
     surface = SurfaceNavy,
-    onSurface = Color.White,
-    surfaceVariant = SurfaceNavyLight,
-    onSurfaceVariant = CodeText.copy(alpha = 0.7f),
-    error = Primary,
+    onSurface = OnDark,
+    surfaceVariant = SurfaceDarkElevated,
+    onSurfaceVariant = OnDarkSoft,
+    error = ErrorColor,
     onError = Color.White,
     outline = BorderNavy,
     scrim = Color.Black.copy(alpha = 0.6f),

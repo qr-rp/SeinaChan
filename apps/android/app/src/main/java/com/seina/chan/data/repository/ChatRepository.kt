@@ -8,6 +8,7 @@ import com.seina.chan.data.model.ToolCallDetail
 import com.seina.chan.data.model.ToolCallStatus
 import com.seina.chan.data.remote.GatewayEvent
 import com.seina.chan.data.remote.HermesWsClient
+import com.seina.chan.util.FileLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +38,13 @@ class ChatRepository(
     }
 
     suspend fun sendMessage(text: String, sessionId: String) {
+        // 结束所有未完成的 assistant 消息，避免积累空消息
+        _messages.value = _messages.value.map {
+            if (it.isStreaming && it.role == "assistant") {
+                it.copy(isStreaming = false, isReasoning = false)
+            } else it
+        }
+
         val userMessage = ChatMessage(
             id = java.util.UUID.randomUUID().toString(),
             role = "user",
@@ -59,6 +67,13 @@ class ChatRepository(
      * @param sessionId 会话 ID
      */
     suspend fun sendImage(imageUri: Uri, contentResolver: ContentResolver, sessionId: String) {
+        // 结束所有未完成的 assistant 消息，避免积累空消息
+        _messages.value = _messages.value.map {
+            if (it.isStreaming && it.role == "assistant") {
+                it.copy(isStreaming = false, isReasoning = false)
+            } else it
+        }
+
         // 读取图片并转为 base64
         val base64Data = withContext(Dispatchers.IO) {
             contentResolver.openInputStream(imageUri)?.use { inputStream ->
@@ -120,77 +135,87 @@ class ChatRepository(
     }
 
     private fun handleEvent(event: GatewayEvent) {
-        when (event) {
-            is GatewayEvent.MessageStart -> {
-                val msgId = event.id.ifBlank { "streaming" }
-                val msg = ChatMessage(
-                    id = msgId,
-                    role = event.role.ifBlank { "assistant" },
-                    content = "",
-                    isStreaming = true,
-                    isReasoning = true
-                )
-                _messages.value += msg
-            }
-            is GatewayEvent.MessageDelta -> {
-                _messages.value = _messages.value.mapIndexed { index, msg ->
-                    if (index == _messages.value.lastIndex && msg.isStreaming && msg.role == "assistant") {
-                        msg.copy(content = msg.content + event.delta)
-                    } else msg
+        try {
+            when (event) {
+                is GatewayEvent.MessageStart -> {
+                    // 结束所有已有的 assistant streaming 消息，避免服务器发送多个 message.start 时积累空消息
+                    _messages.value = _messages.value.map {
+                        if (it.isStreaming && it.role == "assistant") {
+                            it.copy(isStreaming = false, isReasoning = false)
+                        } else it
+                    }
+                    val msgId = event.id.ifBlank { java.util.UUID.randomUUID().toString() }
+                    val msg = ChatMessage(
+                        id = msgId,
+                        role = event.role.ifBlank { "assistant" },
+                        content = "",
+                        isStreaming = true,
+                        isReasoning = true
+                    )
+                    _messages.value += msg
                 }
-            }
-            is GatewayEvent.MessageComplete -> {
-                _messages.value = _messages.value.mapIndexed { index, msg ->
-                    if (index == _messages.value.lastIndex && msg.isStreaming && msg.role == "assistant") {
-                        msg.copy(
+                is GatewayEvent.MessageDelta -> {
+                    updateLastStreamingAssistantMessage { msg ->
+                        msg.copy(content = msg.content + event.delta)
+                    }
+                }
+                is GatewayEvent.MessageComplete -> {
+                    val messages = _messages.value.toMutableList()
+                    val index = messages.indexOfLast { it.isStreaming && it.role == "assistant" }
+                    if (index >= 0) {
+                        val msg = messages[index]
+                        messages[index] = msg.copy(
                             isStreaming = false,
                             isReasoning = false,
                             reasoningText = event.reasoning.ifBlank { msg.reasoningText }
                         )
-                    } else msg
+                        _messages.value = messages
+                    }
                 }
-            }
-            is GatewayEvent.ReasoningDelta -> {
-                updateLastStreamingAssistantMessage { it.copy(reasoningText = it.reasoningText + event.text) }
-            }
-            is GatewayEvent.ThinkingDelta -> {
-                updateLastStreamingAssistantMessage { it.copy(reasoningText = it.reasoningText + event.text) }
-            }
-            is GatewayEvent.ReasoningAvailable -> {
-                updateLastStreamingAssistantMessage { it.copy(reasoningText = event.text) }
-            }
-            is GatewayEvent.ToolStart -> {
-                val toolCall = ToolCallDetail(
-                    id = event.toolId,
-                    name = event.name,
-                    args = event.args,
-                    status = ToolCallStatus.Running
-                )
-                appendToolCallToStreamingMessage(toolCall)
-            }
-            is GatewayEvent.ToolProgress -> {
-                updateToolCall(event.toolId) { it.copy(result = it.result + event.text) }
-            }
-            is GatewayEvent.ToolComplete -> {
-                updateToolCall(event.toolId) {
-                    it.copy(
-                        status = ToolCallStatus.Success,
-                        result = event.result,
-                        duration = event.duration,
-                        summary = event.summary
+                is GatewayEvent.ReasoningDelta -> {
+                    updateLastStreamingAssistantMessage { it.copy(reasoningText = it.reasoningText + event.text) }
+                }
+                is GatewayEvent.ThinkingDelta -> {
+                    updateLastStreamingAssistantMessage { it.copy(reasoningText = it.reasoningText + event.text) }
+                }
+                is GatewayEvent.ReasoningAvailable -> {
+                    updateLastStreamingAssistantMessage { it.copy(reasoningText = event.text) }
+                }
+                is GatewayEvent.ToolStart -> {
+                    val toolCall = ToolCallDetail(
+                        id = event.toolId,
+                        name = event.name,
+                        args = event.args,
+                        status = ToolCallStatus.Running
                     )
+                    appendToolCallToStreamingMessage(toolCall)
                 }
+                is GatewayEvent.ToolProgress -> {
+                    updateToolCall(event.toolId) { it.copy(result = it.result + event.text) }
+                }
+                is GatewayEvent.ToolComplete -> {
+                    updateToolCall(event.toolId) {
+                        it.copy(
+                            status = ToolCallStatus.Success,
+                            result = event.result,
+                            duration = event.duration,
+                            summary = event.summary
+                        )
+                    }
+                }
+                is GatewayEvent.ApprovalRequest -> {
+                    val toolCall = ToolCallDetail(
+                        id = event.id,
+                        name = event.toolName,
+                        args = event.input.toString(),
+                        status = ToolCallStatus.Running
+                    )
+                    appendToolCallToStreamingMessage(toolCall)
+                }
+                else -> Unit
             }
-            is GatewayEvent.ApprovalRequest -> {
-                val toolCall = ToolCallDetail(
-                    id = event.id,
-                    name = event.toolName,
-                    args = event.input.toString(),
-                    status = ToolCallStatus.Running
-                )
-                appendToolCallToStreamingMessage(toolCall)
-            }
-            else -> Unit
+        } catch (e: Exception) {
+            FileLogger.e("ChatRepository", "handleEvent failed for ${event::class.simpleName}", e)
         }
     }
 
@@ -203,10 +228,11 @@ class ChatRepository(
     }
 
     private fun appendToolCallToStreamingMessage(toolCall: ToolCallDetail) {
-        _messages.value = _messages.value.map { msg ->
-            if (msg.isStreaming && msg.role == "assistant") {
-                msg.copy(toolCalls = msg.toolCalls + toolCall)
-            } else msg
+        val messages = _messages.value.toMutableList()
+        val index = messages.indexOfLast { it.isStreaming && it.role == "assistant" }
+        if (index >= 0) {
+            messages[index] = messages[index].copy(toolCalls = messages[index].toolCalls + toolCall)
+            _messages.value = messages
         }
     }
 

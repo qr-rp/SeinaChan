@@ -23,22 +23,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.AppShapes
-import com.seina.chan.ui.theme.Canvas
 import com.seina.chan.ui.theme.ErrorColor
-import com.seina.chan.ui.theme.Hairline
-import com.seina.chan.ui.theme.Ink
-import com.seina.chan.ui.theme.InkLight
-import com.seina.chan.ui.theme.Muted
-import com.seina.chan.ui.theme.MutedSoft
-import com.seina.chan.ui.theme.Primary
-import com.seina.chan.ui.theme.PrimaryDisabled
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.Success
 import com.seina.chan.ui.theme.TextStyles
@@ -61,7 +53,7 @@ fun ConnectScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Canvas)
+            .background(MaterialTheme.colorScheme.background)
             .safeDrawingPadding()
             .padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -128,10 +120,10 @@ fun ConnectScreen(
                 enabled = !uiState.isLoading,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Ink,
-                    disabledContentColor = Muted
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
-                border = BorderStroke(1.dp, Hairline)
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Text("测试连接")
             }
@@ -142,7 +134,7 @@ fun ConnectScreen(
                     Text(
                         text = "测试中...",
                         style = TextStyles.bodySm,
-                        color = InkLight,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -191,10 +183,10 @@ fun ConnectScreen(
                 enabled = !uiState.isLoading,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Primary,
-                    contentColor = Color.White,
-                    disabledContainerColor = PrimaryDisabled,
-                    disabledContentColor = Muted
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
                 shape = AppShapes.md
             ) {
@@ -206,7 +198,7 @@ fun ConnectScreen(
             Text(
                 text = "配置 Hermes Dashboard 连接信息",
                 style = TextStyles.caption,
-                color = InkLight
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -214,15 +206,15 @@ fun ConnectScreen(
 
 @Composable
 private fun outlinedTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedContainerColor = Canvas,
-    unfocusedContainerColor = Canvas,
-    focusedBorderColor = Primary,
-    unfocusedBorderColor = Hairline,
-    focusedTextColor = Ink,
-    unfocusedTextColor = Ink,
-    cursorColor = Primary,
-    focusedLabelColor = Primary,
-    unfocusedLabelColor = Muted,
-    focusedPlaceholderColor = MutedSoft,
-    unfocusedPlaceholderColor = MutedSoft
+    focusedContainerColor = MaterialTheme.colorScheme.background,
+    unfocusedContainerColor = MaterialTheme.colorScheme.background,
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+    focusedTextColor = MaterialTheme.colorScheme.onBackground,
+    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+    cursorColor = MaterialTheme.colorScheme.primary,
+    focusedLabelColor = MaterialTheme.colorScheme.primary,
+    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+    unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
 )

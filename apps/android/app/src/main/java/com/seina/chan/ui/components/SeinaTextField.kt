@@ -22,13 +22,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.AppShapes
-import com.seina.chan.ui.theme.Hairline
-import com.seina.chan.ui.theme.Ink
-import com.seina.chan.ui.theme.InkLight
-import com.seina.chan.ui.theme.Primary
 import com.seina.chan.ui.theme.Spacing
-import com.seina.chan.ui.theme.SurfaceCard
 import com.seina.chan.ui.theme.TextStyles
 
 @Composable
@@ -50,7 +46,7 @@ fun SeinaTextField(
     val isFocused by interactionSource.collectIsFocusedAsState()
 
     val borderColor by animateColorAsState(
-        targetValue = if (isFocused) Primary else Hairline,
+        targetValue = if (isFocused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
         label = "borderColor"
     )
 
@@ -59,7 +55,7 @@ fun SeinaTextField(
         label = "borderWidth"
     )
 
-    val outerBorderColor = if (isFocused) Primary.copy(alpha = 0.2f) else Color.Transparent
+    val outerBorderColor = if (isFocused) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent
 
     Box(
         modifier = modifier
@@ -67,7 +63,7 @@ fun SeinaTextField(
             .border(width = 3.dp, color = outerBorderColor, shape = AppShapes.md)
             .padding(3.dp)
             .clip(AppShapes.md)
-            .background(SurfaceCard)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .border(width = borderWidth, color = borderColor, shape = AppShapes.md)
             .padding(horizontal = Spacing.md, vertical = 12.dp)
     ) {
@@ -77,8 +73,8 @@ fun SeinaTextField(
             modifier = Modifier.fillMaxWidth(),
             enabled = enabled,
             readOnly = readOnly,
-            textStyle = TextStyles.bodyMd.copy(color = Ink),
-            cursorBrush = SolidColor(Primary),
+            textStyle = TextStyles.bodyMd.copy(color = MaterialTheme.colorScheme.onBackground),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             visualTransformation = visualTransformation,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
@@ -91,7 +87,7 @@ fun SeinaTextField(
                     Text(
                         text = placeholder,
                         style = TextStyles.bodyMd,
-                        color = InkLight
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 innerTextField()

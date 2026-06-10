@@ -92,8 +92,8 @@ class SettingsRepository(
         private val SHOW_TIMESTAMPS_KEY = booleanPreferencesKey("show_timestamps")
         private val AUTO_EXPAND_REASONING_KEY = booleanPreferencesKey("auto_expand_reasoning")
         private val AUTO_EXPAND_TOOLS_KEY = booleanPreferencesKey("auto_expand_tools")
-        private val CONNECTION_IP_KEY = stringPreferencesKey("connection_ip")
-        private val CONNECTION_PORT_KEY = stringPreferencesKey("connection_port")
-        private val CONNECTION_TOKEN_KEY = stringPreferencesKey("connection_token")
+        private val CONNECTION_IP_KEY = stringPreferencesKey("ip")
+        private val CONNECTION_PORT_KEY = stringPreferencesKey("port")
+        private val CONNECTION_TOKEN_KEY = stringPreferencesKey("token")
     }
 }

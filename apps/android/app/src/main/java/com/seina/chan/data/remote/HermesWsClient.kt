@@ -275,12 +275,10 @@ class HermesWsClient(
                 text = payload?.get("text")?.jsonPrimitive?.content ?: ""
             )
             "tool.start" -> {
-                val argsElement = payload?.get("args")
-                val argsString = when {
-                    argsElement == null -> ""
-                    argsElement is JsonPrimitive -> argsElement.jsonPrimitive.content
-                    else -> argsElement.toString()
-                }
+                // Hermes 发送 context / args_text，没有 args 字段
+                val argsString = payload?.get("args_text")?.jsonPrimitive?.content
+                    ?: payload?.get("context")?.jsonPrimitive?.content
+                    ?: ""
                 GatewayEvent.ToolStart(
                     toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
                     name = payload?.get("name")?.jsonPrimitive?.content ?: "",
@@ -291,13 +289,22 @@ class HermesWsClient(
                 toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
                 text = payload?.get("text")?.jsonPrimitive?.content ?: ""
             )
-            "tool.complete" -> GatewayEvent.ToolComplete(
-                toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
-                name = payload?.get("name")?.jsonPrimitive?.content ?: "",
-                result = payload?.get("result")?.jsonPrimitive?.content ?: "",
-                duration = payload?.get("duration")?.jsonPrimitive?.content?.toFloatOrNull(),
-                summary = payload?.get("summary")?.jsonPrimitive?.content ?: ""
-            )
+            "tool.complete" -> {
+                // result 可能是 JSON 对象/数组，需要转为字符串
+                val resultElement = payload?.get("result")
+                val resultString = when {
+                    resultElement == null -> ""
+                    resultElement is JsonPrimitive -> resultElement.jsonPrimitive.content
+                    else -> resultElement.toString()
+                }
+                GatewayEvent.ToolComplete(
+                    toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
+                    name = payload?.get("name")?.jsonPrimitive?.content ?: "",
+                    result = resultString,
+                    duration = payload?.get("duration_s")?.jsonPrimitive?.content?.toFloatOrNull(),
+                    summary = payload?.get("summary")?.jsonPrimitive?.content ?: ""
+                )
+            }
             "approval.request" -> GatewayEvent.ApprovalRequest(
                 id = payload?.get("id")?.jsonPrimitive?.content ?: "",
                 toolName = payload?.get("tool_name")?.jsonPrimitive?.content ?: "",

@@ -24,7 +24,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,15 +37,14 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.ui.theme.AppShapes
-import com.seina.chan.ui.theme.Canvas
-import com.seina.chan.ui.theme.Hairline
-import com.seina.chan.ui.theme.Ink
-import com.seina.chan.ui.theme.Primary
-import com.seina.chan.ui.theme.SurfaceCard
 import com.seina.chan.ui.theme.TextStyles
 
 @Composable
-fun MessageBubble(message: ChatMessage) {
+fun MessageBubble(
+    message: ChatMessage,
+    showToolCalls: Boolean = true,
+    showReasoning: Boolean = true
+) {
     val isUser = message.role == "user"
     Row(
         modifier = Modifier
@@ -55,7 +55,7 @@ fun MessageBubble(message: ChatMessage) {
         if (!isUser) {
             Avatar(
                 text = "★",
-                backgroundColor = Primary,
+                backgroundColor = MaterialTheme.colorScheme.primary,
                 contentColor = Color.White
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -65,7 +65,7 @@ fun MessageBubble(message: ChatMessage) {
             Box(
                 modifier = Modifier
                     .background(
-                        color = if (isUser) Primary else SurfaceCard,
+                        color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         shape = AppShapes.lg
                     )
                     .padding(12.dp)
@@ -89,7 +89,7 @@ fun MessageBubble(message: ChatMessage) {
                             Text(
                                 text = message.content,
                                 style = TextStyles.bodyMd,
-                                color = if (isUser) Color.White else Ink
+                                color = if (isUser) Color.White else MaterialTheme.colorScheme.onBackground
                             )
                         }
                     }
@@ -97,7 +97,7 @@ fun MessageBubble(message: ChatMessage) {
             }
 
             // 思考链面板（仅 assistant 消息显示）
-            if (!isUser && (message.isReasoning || message.reasoningText.isNotBlank())) {
+            if (showReasoning && !isUser && (message.isReasoning || message.reasoningText.isNotBlank())) {
                 ReasoningPanel(
                     reasoningText = message.reasoningText,
                     isReasoning = message.isReasoning,
@@ -106,11 +106,15 @@ fun MessageBubble(message: ChatMessage) {
             }
 
             // 工具调用卡片列表
-            message.toolCalls.forEach { toolCall ->
-                ToolCallCard(
-                    toolCall = toolCall,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+            if (showToolCalls) {
+                message.toolCalls.forEach { toolCall ->
+                    key(toolCall.id) {
+                        ToolCallCard(
+                            toolCall = toolCall,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -118,9 +122,9 @@ fun MessageBubble(message: ChatMessage) {
             Spacer(modifier = Modifier.width(8.dp))
             Avatar(
                 text = "🙂",
-                backgroundColor = Canvas,
-                contentColor = Ink,
-                borderColor = Hairline
+                backgroundColor = MaterialTheme.colorScheme.background,
+                contentColor = MaterialTheme.colorScheme.onBackground,
+                borderColor = MaterialTheme.colorScheme.outline
             )
         }
     }
@@ -132,7 +136,7 @@ private fun ReasoningPanel(
     isReasoning: Boolean,
     modifier: Modifier = Modifier
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -157,7 +161,7 @@ private fun ReasoningPanel(
                 Box(
                     modifier = Modifier
                         .size(8.dp)
-                        .background(color = Primary, shape = CircleShape)
+                        .background(color = MaterialTheme.colorScheme.primary, shape = CircleShape)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
             }
@@ -188,6 +192,7 @@ private fun ReasoningPanel(
 
 private fun isImageContent(content: String): Boolean {
     if (content.startsWith("data:image/")) return true
+    if (content.startsWith("content://")) return true
     val cleanUrl = content.substringBefore("?").substringBefore("#")
     return cleanUrl.startsWith("http") &&
            listOf(".jpg", ".jpeg", ".png", ".gif", ".webp").any { cleanUrl.endsWith(it, ignoreCase = true) }
