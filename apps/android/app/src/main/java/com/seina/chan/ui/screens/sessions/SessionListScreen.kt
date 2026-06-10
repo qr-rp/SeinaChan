@@ -35,12 +35,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.seina.chan.data.model.Session
 import com.seina.chan.data.remote.ConnectionState
 import com.seina.chan.ui.components.ConnectionStatus
 import com.seina.chan.ui.components.ConnectionStatusBar
 import com.seina.chan.ui.components.SeinaButton
+import com.seina.chan.ui.components.VerticalScrollbar
 import com.seina.chan.ui.components.SeinaButtonVariant
 import com.seina.chan.ui.components.SeinaTextField
 import androidx.compose.material3.MaterialTheme
@@ -204,77 +206,86 @@ fun SessionListScreen(
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = Spacing.sm),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.xs)
-                ) {
-                    items(sessions.size) { index ->
-                        val session = sessions[index]
-                        Box {
-                            SessionListItem(
-                                session = session,
-                                isSelected = session.id == selectedSessionId,
-                                isLast = index == sessions.lastIndex,
-                                onClick = { viewModel.selectSession(session.id) },
-                                onLongClick = {
-                                    menuSession = session
-                                    showMenu = true
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = Spacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+                    ) {
+                        items(sessions.size) { index ->
+                            val session = sessions[index]
+                            Box {
+                                SessionListItem(
+                                    session = session,
+                                    isSelected = session.id == selectedSessionId,
+                                    isLast = index == sessions.lastIndex,
+                                    onClick = { viewModel.selectSession(session.id) },
+                                    onLongClick = {
+                                        menuSession = session
+                                        showMenu = true
+                                    }
+                                )
+                                DropdownMenu(
+                                    expanded = showMenu && menuSession?.id == session.id,
+                                    onDismissRequest = { showMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("重命名") },
+                                        onClick = {
+                                            renameSession = menuSession
+                                            renameText = menuSession?.title ?: ""
+                                            showMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("删除") },
+                                        onClick = {
+                                            menuSession?.let { viewModel.deleteSession(it.id) }
+                                            showMenu = false
+                                        }
+                                    )
                                 }
-                            )
-                            DropdownMenu(
-                                expanded = showMenu && menuSession?.id == session.id,
-                                onDismissRequest = { showMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("重命名") },
-                                    onClick = {
-                                        renameSession = menuSession
-                                        renameText = menuSession?.title ?: ""
-                                        showMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("删除") },
-                                    onClick = {
-                                        menuSession?.let { viewModel.deleteSession(it.id) }
-                                        showMenu = false
-                                    }
-                                )
+                            }
+                        }
+
+                        // 底部加载指示器或加载更多按钮
+                        if (isLoadingMore) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = Spacing.md),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        } else if (hasMore) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = Spacing.md),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    SeinaButton(
+                                        text = "加载更多",
+                                        onClick = { viewModel.loadMore() },
+                                        variant = SeinaButtonVariant.Secondary,
+                                        compact = true
+                                    )
+                                }
                             }
                         }
                     }
 
-                    // 底部加载指示器或加载更多按钮
-                    if (isLoadingMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = Spacing.md),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    } else if (hasMore) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = Spacing.md),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                SeinaButton(
-                                    text = "加载更多",
-                                    onClick = { viewModel.loadMore() },
-                                    variant = SeinaButtonVariant.Secondary,
-                                    compact = true
-                                )
-                            }
-                        }
-                    }
+                    VerticalScrollbar(
+                        state = listState,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .zIndex(1f)
+                    )
                 }
             }
         }

@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -40,6 +39,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
@@ -48,6 +48,7 @@ import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.seina.chan.data.remote.GatewayEvent
+import com.seina.chan.ui.components.VerticalScrollbar
 import com.seina.chan.ui.components.dialogs.ApprovalDialog
 import com.seina.chan.util.FileLogger
 import com.seina.chan.ui.components.dialogs.ClarifyDialog
@@ -328,6 +329,13 @@ fun ChatScreen(
                             )
                         }
                     }
+
+                    VerticalScrollbar(
+                        state = listState,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .zIndex(1f)
+                    )
                 }
             }
 

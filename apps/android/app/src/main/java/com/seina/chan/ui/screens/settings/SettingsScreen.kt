@@ -1,6 +1,7 @@
 package com.seina.chan.ui.screens.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Construction
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -41,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -87,245 +101,203 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(horizontal = Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
             // 显示设置
             item {
-                Text(
-                    text = "显示设置",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(
-                        start = Spacing.md,
-                        top = Spacing.md,
-                        bottom = Spacing.xs
+                SettingsSectionCard(
+                    title = "显示设置",
+                    icon = Icons.Filled.Visibility
+                ) {
+                    SwitchSettingItem(
+                        title = "显示工具调用",
+                        description = "在对话中展示工具调用过程",
+                        checked = uiState.showToolCalls,
+                        onCheckedChange = viewModel::setShowToolCalls,
+                        icon = Icons.Filled.Construction
                     )
-                )
-            }
-            item {
-                SwitchSettingItem(
-                    title = "显示工具调用",
-                    description = "在对话中展示工具调用过程",
-                    checked = uiState.showToolCalls,
-                    onCheckedChange = viewModel::setShowToolCalls
-                )
-            }
-            item {
-                SwitchSettingItem(
-                    title = "显示思考链",
-                    description = "在对话中展示 AI 的思考过程",
-                    checked = uiState.showReasoning,
-                    onCheckedChange = viewModel::setShowReasoning
-                )
-            }
-            item {
-                SwitchSettingItem(
-                    title = "显示消息时间戳",
-                    description = "在消息旁显示发送时间",
-                    checked = uiState.showTimestamps,
-                    onCheckedChange = viewModel::setShowTimestamps
-                )
-            }
-            item {
-                ToolVisibilitySettingItem(
-                    hiddenToolNames = uiState.hiddenToolNames,
-                    onHiddenToolsChange = viewModel::setHiddenToolNames
-                )
-            }
-            item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = Spacing.sm),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+                    SwitchSettingItem(
+                        title = "显示思考链",
+                        description = "在对话中展示 AI 的思考过程",
+                        checked = uiState.showReasoning,
+                        onCheckedChange = viewModel::setShowReasoning,
+                        icon = Icons.Filled.ExpandMore
+                    )
+                    SwitchSettingItem(
+                        title = "显示消息时间戳",
+                        description = "在消息旁显示发送时间",
+                        checked = uiState.showTimestamps,
+                        onCheckedChange = viewModel::setShowTimestamps,
+                        icon = Icons.Filled.AccessTime
+                    )
+                    ToolVisibilitySettingItem(
+                        hiddenToolNames = uiState.hiddenToolNames,
+                        onHiddenToolsChange = viewModel::setHiddenToolNames,
+                        icon = Icons.Filled.VisibilityOff
+                    )
+                }
             }
 
             // 行为设置
             item {
-                Text(
-                    text = "行为设置",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(
-                        start = Spacing.md,
-                        top = Spacing.md,
-                        bottom = Spacing.xs
+                SettingsSectionCard(
+                    title = "行为设置",
+                    icon = Icons.Filled.Tune
+                ) {
+                    DropdownSettingItem(
+                        title = "每页会话数",
+                        description = "会话列表每页显示的会话数量",
+                        value = "${uiState.pageSize}",
+                        options = listOf("10", "20", "50"),
+                        icon = Icons.Filled.FormatListNumbered,
+                        onOptionSelected = {
+                            viewModel.setPageSize(it.toInt())
+                        }
                     )
-                )
-            }
-            item {
-                DropdownSettingItem(
-                    title = "每页会话数",
-                    description = "会话列表每页显示的会话数量",
-                    value = "${uiState.pageSize}",
-                    options = listOf("10", "20", "50"),
-                    onOptionSelected = {
-                        viewModel.setPageSize(it.toInt())
-                    }
-                )
-            }
-            item {
-                SwitchSettingItem(
-                    title = "自动展开思考链",
-                    description = "自动展开 AI 的思考链内容",
-                    checked = uiState.autoExpandReasoning,
-                    onCheckedChange = viewModel::setAutoExpandReasoning
-                )
-            }
-            item {
-                SwitchSettingItem(
-                    title = "自动展开工具结果",
-                    description = "自动展开工具调用的返回结果",
-                    checked = uiState.autoExpandTools,
-                    onCheckedChange = viewModel::setAutoExpandTools
-                )
-            }
-            item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = Spacing.sm),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
+                    SwitchSettingItem(
+                        title = "自动展开思考链",
+                        description = "自动展开 AI 的思考链内容",
+                        checked = uiState.autoExpandReasoning,
+                        onCheckedChange = viewModel::setAutoExpandReasoning,
+                        icon = Icons.Filled.ExpandMore
+                    )
+                    SwitchSettingItem(
+                        title = "自动展开工具结果",
+                        description = "自动展开工具调用的返回结果",
+                        checked = uiState.autoExpandTools,
+                        onCheckedChange = viewModel::setAutoExpandTools,
+                        icon = Icons.Filled.ExpandMore
+                    )
+                }
             }
 
             // 外观设置
             item {
-                Text(
-                    text = "外观设置",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(
-                        start = Spacing.md,
-                        top = Spacing.md,
-                        bottom = Spacing.xs
+                SettingsSectionCard(
+                    title = "外观设置",
+                    icon = Icons.Filled.Palette
+                ) {
+                    val themeLabel = when (uiState.themeMode) {
+                        "light" -> "浅色"
+                        "dark" -> "深色"
+                        else -> "跟随系统"
+                    }
+                    DropdownSettingItem(
+                        title = "主题模式",
+                        description = "应用的主题外观",
+                        value = themeLabel,
+                        options = listOf("跟随系统", "浅色", "深色"),
+                        optionValues = listOf("system", "light", "dark"),
+                        icon = Icons.Filled.DarkMode,
+                        onOptionSelected = { viewModel.setThemeMode(it) }
                     )
-                )
-            }
-            item {
-                val themeLabel = when (uiState.themeMode) {
-                    "light" -> "浅色"
-                    "dark" -> "深色"
-                    else -> "跟随系统"
                 }
-                DropdownSettingItem(
-                    title = "主题模式",
-                    description = "应用的主题外观",
-                    value = themeLabel,
-                    options = listOf("跟随系统", "浅色", "深色"),
-                    optionValues = listOf("system", "light", "dark"),
-                    onOptionSelected = { viewModel.setThemeMode(it) }
-                )
-            }
-            item {
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = Spacing.sm),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
             }
 
             // 连接设置
             item {
-                Text(
-                    text = "连接设置",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(
-                        start = Spacing.md,
-                        top = Spacing.md,
-                        bottom = Spacing.xs
-                    )
-                )
-            }
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = Spacing.md)
+                SettingsSectionCard(
+                    title = "连接设置",
+                    icon = Icons.Filled.Link
                 ) {
-                    var ipText by remember { mutableStateOf(uiState.connectionIp) }
-                    var portText by remember { mutableStateOf(uiState.connectionPort) }
-                    var tokenText by remember { mutableStateOf(uiState.connectionToken) }
-
-                    LaunchedEffect(uiState.connectionIp) { ipText = uiState.connectionIp }
-                    LaunchedEffect(uiState.connectionPort) { portText = uiState.connectionPort }
-                    LaunchedEffect(uiState.connectionToken) { tokenText = uiState.connectionToken }
-
-                    OutlinedTextField(
-                        value = ipText,
-                        onValueChange = { ipText = it },
-                        label = {
-                            Text(
-                                text = "IP 地址",
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(Spacing.xs))
-                    OutlinedTextField(
-                        value = portText,
-                        onValueChange = { portText = it },
-                        label = {
-                            Text(
-                                text = "端口",
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(Spacing.xs))
-                    OutlinedTextField(
-                        value = tokenText,
-                        onValueChange = { tokenText = it },
-                        label = {
-                            Text(
-                                text = "Token",
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    )
-                    Spacer(modifier = Modifier.height(Spacing.md))
-                    Button(
-                        onClick = {
-                            viewModel.setConnectionIp(ipText)
-                            viewModel.setConnectionPort(portText)
-                            viewModel.setConnectionToken(tokenText)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.md)
                     ) {
-                        Text(
-                            text = "保存连接配置",
-                            color = MaterialTheme.colorScheme.onPrimary
+                        var ipText by remember { mutableStateOf(uiState.connectionIp) }
+                        var portText by remember { mutableStateOf(uiState.connectionPort) }
+                        var tokenText by remember { mutableStateOf(uiState.connectionToken) }
+
+                        LaunchedEffect(uiState.connectionIp) { ipText = uiState.connectionIp }
+                        LaunchedEffect(uiState.connectionPort) { portText = uiState.connectionPort }
+                        LaunchedEffect(uiState.connectionToken) { tokenText = uiState.connectionToken }
+
+                        OutlinedTextField(
+                            value = ipText,
+                            onValueChange = { ipText = it },
+                            label = {
+                                Text(
+                                    text = "IP 地址",
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
                         )
-                    }
-                    Spacer(modifier = Modifier.height(Spacing.xs))
-                    Button(
-                        onClick = { viewModel.disconnect() },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
+                        Spacer(modifier = Modifier.height(Spacing.xs))
+                        OutlinedTextField(
+                            value = portText,
+                            onValueChange = { portText = it },
+                            label = {
+                                Text(
+                                    text = "端口",
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
                         )
-                    ) {
-                        Text(
-                            text = "断开当前连接",
-                            color = MaterialTheme.colorScheme.onPrimary
+                        Spacer(modifier = Modifier.height(Spacing.xs))
+                        OutlinedTextField(
+                            value = tokenText,
+                            onValueChange = { tokenText = it },
+                            label = {
+                                Text(
+                                    text = "Token",
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
                         )
+                        Spacer(modifier = Modifier.height(Spacing.md))
+                        Button(
+                            onClick = {
+                                viewModel.setConnectionIp(ipText)
+                                viewModel.setConnectionPort(portText)
+                                viewModel.setConnectionToken(tokenText)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text(
+                                text = "保存连接配置",
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(Spacing.xs))
+                        Button(
+                            onClick = { viewModel.disconnect() },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text(
+                                text = "断开当前连接",
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
                     }
                 }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(Spacing.md))
             }
         }
     }
@@ -369,9 +341,50 @@ private val TOOL_CATEGORIES = listOf(
 )
 
 @Composable
+private fun SettingsSectionCard(
+    title: String,
+    icon: ImageVector,
+    content: @Composable () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(
+                    start = Spacing.md,
+                    top = Spacing.md,
+                    end = Spacing.md,
+                    bottom = Spacing.xs
+                )
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(end = Spacing.xs)
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            content()
+        }
+    }
+}
+
+@Composable
 private fun ToolVisibilitySettingItem(
     hiddenToolNames: Set<String>,
-    onHiddenToolsChange: (Set<String>) -> Unit
+    onHiddenToolsChange: (Set<String>) -> Unit,
+    icon: ImageVector? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
 
@@ -390,6 +403,15 @@ private fun ToolVisibilitySettingItem(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
+        },
+        leadingContent = icon?.let {
+            {
+                Icon(
+                    imageVector = it,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         },
         modifier = Modifier.clickable { showDialog = true }
     )
@@ -490,7 +512,8 @@ private fun SwitchSettingItem(
     title: String,
     description: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    icon: ImageVector? = null
 ) {
     ListItem(
         headlineContent = {
@@ -506,6 +529,15 @@ private fun SwitchSettingItem(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onBackground
             )
+        },
+        leadingContent = icon?.let {
+            {
+                Icon(
+                    imageVector = it,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         },
         trailingContent = {
             Switch(
@@ -523,6 +555,7 @@ private fun DropdownSettingItem(
     value: String,
     options: List<String>,
     optionValues: List<String> = emptyList(),
+    icon: ImageVector? = null,
     onOptionSelected: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -543,6 +576,15 @@ private fun DropdownSettingItem(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onBackground
                 )
+            },
+            leadingContent = icon?.let {
+                {
+                    Icon(
+                        imageVector = it,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             },
             trailingContent = {
                 TextButton(onClick = { expanded = true }) {
