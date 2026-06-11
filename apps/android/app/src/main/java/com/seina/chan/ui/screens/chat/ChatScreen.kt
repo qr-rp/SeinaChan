@@ -213,12 +213,6 @@ fun ChatScreen(
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Text(
-                        text = "会话",
-                        style = TextStyles.displaySm,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(Spacing.md)
-                    )
                     SessionListScreen(
                         viewModel = hiltViewModel(),
                         onSessionSelected = { selectedId ->

@@ -25,6 +25,8 @@ class SettingsRepository(
     val connectionPort: Flow<String> = dataStore.data.map { it[CONNECTION_PORT_KEY] ?: "" }
     val connectionToken: Flow<String> = dataStore.data.map { it[CONNECTION_TOKEN_KEY] ?: "" }
     val hiddenToolNames: Flow<Set<String>> = dataStore.data.map { it[HIDDEN_TOOL_NAMES_KEY] ?: emptySet() }
+    /** 自定义工具链，格式为 "category|tool_name" 的 Set */
+    val customTools: Flow<Set<String>> = dataStore.data.map { it[CUSTOM_TOOLS_KEY] ?: emptySet() }
 
     suspend fun setPageSize(value: Int) {
         dataStore.edit { prefs ->
@@ -92,6 +94,12 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setCustomTools(value: Set<String>) {
+        dataStore.edit { prefs ->
+            prefs[CUSTOM_TOOLS_KEY] = value
+        }
+    }
+
     companion object {
         private val PAGE_SIZE_KEY = intPreferencesKey("page_size")
         private val SHOW_TOOL_CALLS_KEY = booleanPreferencesKey("show_tool_calls")
@@ -104,5 +112,6 @@ class SettingsRepository(
         private val CONNECTION_PORT_KEY = stringPreferencesKey("port")
         private val CONNECTION_TOKEN_KEY = stringPreferencesKey("token")
         private val HIDDEN_TOOL_NAMES_KEY = stringSetPreferencesKey("hidden_tool_names")
+        private val CUSTOM_TOOLS_KEY = stringSetPreferencesKey("custom_tools")
     }
 }

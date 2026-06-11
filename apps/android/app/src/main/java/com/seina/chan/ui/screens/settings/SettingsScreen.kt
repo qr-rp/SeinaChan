@@ -11,13 +11,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Construction
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Link
@@ -134,6 +137,9 @@ fun SettingsScreen(
                     ToolVisibilitySettingItem(
                         hiddenToolNames = uiState.hiddenToolNames,
                         onHiddenToolsChange = viewModel::setHiddenToolNames,
+                        customTools = uiState.customTools,
+                        onAddCustomTool = { category, name -> viewModel.addCustomTool(category, name) },
+                        onRemoveCustomTool = { category, name -> viewModel.removeCustomTool(category, name) },
                         icon = Icons.Filled.VisibilityOff
                     )
                 }
@@ -306,24 +312,26 @@ fun SettingsScreen(
 private val TOOL_CATEGORIES = listOf(
     "基础工具" to listOf(
         "terminal", "execute_code", "read_file", "write_file", "search_files", "patch",
-        "process", "todo", "delegate_task", "deep_research", "cronjob", "memory",
+        "process", "todo", "delegate_task", "cronjob", "memory",
         "session_search", "clarify", "send_message", "mixture_of_agents"
     ),
     "Web/搜索" to listOf("web_search", "web_extract", "x_search"),
     "音视频/图像" to listOf(
         "vision_analyze", "video_analyze", "video_generate", "image_generate",
-        "audio_transcribe", "text_to_speech"
+        "text_to_speech"
     ),
     "浏览器" to listOf(
         "browser_navigate", "browser_click", "browser_type", "browser_scroll",
         "browser_snapshot", "browser_back", "browser_press", "browser_console",
         "browser_dialog", "browser_get_images", "browser_cdp", "browser_vision"
     ),
-    "技能/插件" to listOf(
-        "skill_view", "skill_manage", "skills_list", "novel_search", "novel_info",
-        "novel_chapters", "novel_read", "novel_download", "comic_search",
-        "comic_analyze", "comic_download"
+    "技能/插件" to listOf("skills_list", "skill_view", "skill_manage"),
+    "Spotify" to listOf(
+        "spotify_playback", "spotify_devices", "spotify_queue", "spotify_search",
+        "spotify_playlists", "spotify_albums", "spotify_library"
     ),
+    "Google Meet" to listOf("meet_join", "meet_status", "meet_transcript", "meet_leave", "meet_say"),
+    "工具搜索" to listOf("tool_search", "tool_describe", "tool_call"),
     "Home Assistant" to listOf("ha_list_entities", "ha_get_state", "ha_list_services", "ha_call_service"),
     "看板" to listOf(
         "kanban_list", "kanban_show", "kanban_create", "kanban_comment",
@@ -384,6 +392,9 @@ private fun SettingsSectionCard(
 private fun ToolVisibilitySettingItem(
     hiddenToolNames: Set<String>,
     onHiddenToolsChange: (Set<String>) -> Unit,
+    customTools: Set<String>,
+    onAddCustomTool: (String, String) -> Unit,
+    onRemoveCustomTool: (String, String) -> Unit,
     icon: ImageVector? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
@@ -419,6 +430,21 @@ private fun ToolVisibilitySettingItem(
     if (showDialog) {
         var searchQuery by remember { mutableStateOf("") }
         var localHidden by remember { mutableStateOf(hiddenToolNames) }
+        // 自定义工具链输入状态
+        var newToolName by remember { mutableStateOf("") }
+        var newToolCategory by remember { mutableStateOf("自定义") }
+        var showAddSection by remember { mutableStateOf(false) }
+
+        // 解析自定义工具为分类映射
+        val customToolsByCategory = remember(customTools) {
+            customTools.groupBy({ entry ->
+                val parts = entry.split("|", limit = 2)
+                if (parts.size == 2) parts[0] else "自定义"
+            }, { entry ->
+                val parts = entry.split("|", limit = 2)
+                if (parts.size == 2) parts[1] else entry
+            })
+        }
 
         AlertDialog(
             onDismissRequest = { showDialog = false },
@@ -433,12 +459,15 @@ private fun ToolVisibilitySettingItem(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(Spacing.sm))
+
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 400.dp)
+                            .heightIn(max = 360.dp)
                     ) {
                         val query = searchQuery.trim().lowercase()
+
+                        // 内置工具分类
                         TOOL_CATEGORIES.forEach { (category, tools) ->
                             val filteredTools = if (query.isEmpty()) {
                                 tools
@@ -454,38 +483,112 @@ private fun ToolVisibilitySettingItem(
                                         modifier = Modifier.padding(vertical = Spacing.xs)
                                     )
                                 }
-                                items(filteredTools, key = { it }) { tool ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                localHidden = if (tool in localHidden) {
-                                                    localHidden - tool
-                                                } else {
-                                                    localHidden + tool
-                                                }
-                                            }
-                                            .padding(vertical = 4.dp)
-                                    ) {
-                                        Checkbox(
-                                            checked = tool in localHidden,
-                                            onCheckedChange = { checked ->
-                                                localHidden = if (checked) {
-                                                    localHidden + tool
-                                                } else {
-                                                    localHidden - tool
-                                                }
-                                            }
-                                        )
+                                items(filteredTools, key = { "builtin|$category|$it" }) { tool ->
+                                    ToolCheckRow(
+                                        toolName = tool,
+                                        isChecked = tool in localHidden,
+                                        onCheckedChange = { checked ->
+                                            localHidden = if (checked) localHidden + tool else localHidden - tool
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        // 自定义工具分类
+                        if (customToolsByCategory.isNotEmpty()) {
+                            customToolsByCategory.forEach { (category, tools) ->
+                                val filteredTools = if (query.isEmpty()) {
+                                    tools
+                                } else {
+                                    tools.filter { it.lowercase().contains(query) }
+                                }
+                                if (filteredTools.isNotEmpty()) {
+                                    item {
                                         Text(
-                                            text = tool,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onBackground
+                                            text = "$category（自定义）",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier.padding(vertical = Spacing.xs)
+                                        )
+                                    }
+                                    items(filteredTools, key = { "custom|$category|$it" }) { tool ->
+                                        ToolCheckRow(
+                                            toolName = tool,
+                                            isChecked = tool in localHidden,
+                                            onCheckedChange = { checked ->
+                                                localHidden = if (checked) localHidden + tool else localHidden - tool
+                                            },
+                                            onDelete = { onRemoveCustomTool(category, tool) }
                                         )
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(Spacing.sm))
+
+                    // 添加自定义工具链
+                    if (showAddSection) {
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(Spacing.xs))
+                        Text(
+                            text = "添加自定义工具链",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                        Spacer(modifier = Modifier.height(Spacing.xs))
+                        OutlinedTextField(
+                            value = newToolCategory,
+                            onValueChange = { newToolCategory = it },
+                            label = { Text("分类") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(Spacing.xs))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = newToolName,
+                                onValueChange = { newToolName = it },
+                                label = { Text("工具名称") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(Spacing.xs))
+                            IconButton(
+                                onClick = {
+                                    val name = newToolName.trim()
+                                    val cat = newToolCategory.trim().ifBlank { "自定义" }
+                                    if (name.isNotBlank()) {
+                                        onAddCustomTool(cat, name)
+                                        newToolName = ""
+                                    }
+                                },
+                                enabled = newToolName.trim().isNotBlank()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = "添加",
+                                    tint = if (newToolName.trim().isNotBlank()) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        TextButton(onClick = { showAddSection = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = Spacing.xxs)
+                            )
+                            Text("添加自定义工具链")
                         }
                     }
                 }
@@ -504,6 +607,46 @@ private fun ToolVisibilitySettingItem(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun ToolCheckRow(
+    toolName: String,
+    isChecked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onDelete: (() -> Unit)? = null
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!isChecked) }
+            .padding(vertical = 4.dp)
+    ) {
+        Checkbox(
+            checked = isChecked,
+            onCheckedChange = onCheckedChange
+        )
+        Text(
+            text = toolName,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f)
+        )
+        if (onDelete != null) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.padding(0.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = "删除",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(0.dp)
+                )
+            }
+        }
     }
 }
 

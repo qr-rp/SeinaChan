@@ -1,6 +1,7 @@
 package com.seina.chan.data.remote
 
 import com.seina.chan.util.FileLogger
+import com.seina.chan.util.NetworkMonitor
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.websocket.Frame
@@ -12,7 +13,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,10 +26,11 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.pow
@@ -44,8 +45,27 @@ sealed class ConnectionState {
 
 class HermesWsClient(
     private val client: HttpClient,
-    private val json: Json = Json { ignoreUnknownKeys = true }
+    private val json: Json = Json { ignoreUnknownKeys = true },
+    private val networkMonitor: NetworkMonitor
 ) {
+    companion object {
+        /** JSON-RPC 方法超时配置（毫秒） */
+        private val METHOD_TIMEOUTS = mapOf(
+            HermesMethods.SESSION_CREATE to 30_000L,
+            HermesMethods.SESSION_RESUME to 30_000L,
+            HermesMethods.PROMPT_SUBMIT to 300_000L,
+            HermesMethods.IMAGE_ATTACH_BYTES to 120_000L,
+        )
+        private const val DEFAULT_TIMEOUT = 60_000L
+
+        /** 心跳超时：60 秒未收到帧则断开 */
+        private const val HEARTBEAT_TIMEOUT_MS = 60_000L
+        /** 心跳检查间隔 */
+        private const val HEARTBEAT_CHECK_INTERVAL_MS = 30_000L
+        /** 最大重连延迟：5 分钟 */
+        private const val MAX_RECONNECT_DELAY_MS = 300_000L
+    }
+
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
 
@@ -65,11 +85,37 @@ class HermesWsClient(
     private var lastUrl: String? = null
     private var lastToken: String? = null
 
+    /** 上次收到帧的时间戳，用于心跳超时检测 */
+    private var lastFrameTime = 0L
+    private var heartbeatWatchJob: Job? = null
+
     init {
         scope.launch {
             state.collect { s ->
                 if ((s is ConnectionState.Closed || s is ConnectionState.Error) && shouldReconnect) {
                     scheduleReconnect()
+                }
+            }
+        }
+
+        // 网络状态监控
+        scope.launch {
+            networkMonitor.networkAvailable.collect { available ->
+                if (available) {
+                    // 网络恢复，如果当前断开则立即重连
+                    val currentState = _state.value
+                    if ((currentState is ConnectionState.Closed || currentState is ConnectionState.Error) && shouldReconnect) {
+                        FileLogger.i("HermesWsClient", "网络恢复，立即重连")
+                        reconnectAttempts = 0
+                        reconnectJob?.cancel()
+                        reconnectJob = null
+                        scheduleReconnect()
+                    }
+                } else {
+                    // 网络断开，取消重连
+                    FileLogger.w("HermesWsClient", "网络断开，取消重连")
+                    reconnectJob?.cancel()
+                    reconnectJob = null
                 }
             }
         }
@@ -103,16 +149,35 @@ class HermesWsClient(
         _state.value = ConnectionState.Connecting
         FileLogger.i("HermesWsClient", "doConnect() starting, url=$url")
         return try {
+            // 通过 URL 参数传递 token（Hermes 服务端只认 query params）
             val wsUrl = if (url.contains("?")) "$url&token=$token" else "$url?token=$token"
             val newSession = client.webSocketSession(wsUrl)
             session = newSession
             _state.value = ConnectionState.Open
             reconnectAttempts = 0
+            lastFrameTime = System.currentTimeMillis()
             FileLogger.i("HermesWsClient", "WebSocket handshake succeeded")
+
+            // 启动心跳超时监控
+            heartbeatWatchJob?.cancel()
+            heartbeatWatchJob = scope.launch {
+                while (true) {
+                    delay(HEARTBEAT_CHECK_INTERVAL_MS)
+                    val elapsed = System.currentTimeMillis() - lastFrameTime
+                    if (elapsed > HEARTBEAT_TIMEOUT_MS) {
+                        FileLogger.w("HermesWsClient", "心跳超时：${elapsed}ms 未收到帧")
+                        try {
+                            session?.close()
+                        } catch (_: Exception) {}
+                        break
+                    }
+                }
+            }
 
             scope.launch {
                 try {
                     for (frame in newSession.incoming) {
+                        lastFrameTime = System.currentTimeMillis()
                         if (frame is Frame.Text) {
                             val text = frame.readText()
                             FileLogger.d("HermesWsClient", "Frame received: ${text.take(500)}")
@@ -122,6 +187,8 @@ class HermesWsClient(
                 } catch (e: Exception) {
                     FileLogger.e("HermesWsClient", "incoming loop exception", e)
                 } finally {
+                    heartbeatWatchJob?.cancel()
+                    heartbeatWatchJob = null
                     FileLogger.w("HermesWsClient", "incoming loop ended, state=${_state.value}")
                     if (_state.value == ConnectionState.Open) {
                         _state.value = ConnectionState.Closed
@@ -140,13 +207,11 @@ class HermesWsClient(
 
     private fun scheduleReconnect() {
         if (reconnectJob?.isActive == true) return
-        if (reconnectAttempts >= 5) {
-            shouldReconnect = false
-            _state.value = ConnectionState.Error("重连失败，已达到最大尝试次数")
-            return
-        }
+        // 无限重连，不设尝试次数上限
         reconnectJob = scope.launch {
-            val delayMs = (1000 * 2.0.pow(reconnectAttempts.toDouble())).toLong().coerceAtMost(30000)
+            val delayMs = (1000 * 2.0.pow(reconnectAttempts.toDouble())).toLong()
+                .coerceAtMost(MAX_RECONNECT_DELAY_MS)
+            FileLogger.i("HermesWsClient", "计划重连，第${reconnectAttempts + 1}次，延迟${delayMs}ms")
             delay(delayMs)
             reconnectAttempts++
             val url = lastUrl ?: return@launch
@@ -166,8 +231,9 @@ class HermesWsClient(
         val s = session ?: throw IllegalStateException("WebSocket not connected")
         s.send(Frame.Text(text))
 
+        val timeout = METHOD_TIMEOUTS[method] ?: DEFAULT_TIMEOUT
         return try {
-            withTimeout(120_000) {
+            withTimeout(timeout) {
                 deferred.await()
             }
         } catch (e: Exception) {
@@ -182,6 +248,8 @@ class HermesWsClient(
         shouldReconnect = false
         reconnectJob?.cancel()
         reconnectJob = null
+        heartbeatWatchJob?.cancel()
+        heartbeatWatchJob = null
         scope.launch {
             session?.close()
             session = null
@@ -222,19 +290,18 @@ class HermesWsClient(
                 return
             }
 
-            // 事件通知（method == "event"）
+            // 事件通知（method == "event"）— 统一使用 GatewayEventSerializer 反序列化
             val method = obj["method"]?.jsonPrimitive?.content
             if (method == "event") {
                 val params = obj["params"]?.jsonObject ?: return
-                val eventType = params["type"]?.jsonPrimitive?.content ?: return
-                val sessionId = params["session_id"]?.jsonPrimitive?.content
-                val payload = params["payload"]?.jsonObject
-                val event = parseEvent(eventType, sessionId, payload)
-                if (event != null) {
+                val transformed = transformEventParams(params)
+                try {
+                    val event = json.decodeFromJsonElement(GatewayEventSerializer, transformed)
                     FileLogger.d("HermesWsClient", "Event parsed: ${event::class.simpleName}")
                     _events.tryEmit(event)
-                } else {
-                    FileLogger.w("HermesWsClient", "Unknown event type: $eventType")
+                } catch (e: Exception) {
+                    val eventType = params["type"]?.jsonPrimitive?.content ?: "unknown"
+                    FileLogger.e("HermesWsClient", "Failed to deserialize event type=$eventType", e)
                 }
             }
         } catch (e: Exception) {
@@ -242,81 +309,17 @@ class HermesWsClient(
         }
     }
 
-    private fun parseEvent(eventType: String, sessionId: String?, payload: JsonObject?): GatewayEvent? {
-        return when (eventType) {
-            "gateway.ready" -> GatewayEvent.GatewayReady
-            "session.info" -> GatewayEvent.SessionInfo(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                title = payload?.get("title")?.jsonPrimitive?.content
-            )
-            "message.start" -> GatewayEvent.MessageStart(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                parentId = payload?.get("parent_id")?.jsonPrimitive?.content,
-                role = payload?.get("role")?.jsonPrimitive?.content ?: "assistant"
-            )
-            "message.delta" -> GatewayEvent.MessageDelta(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                delta = payload?.get("text")?.jsonPrimitive?.content ?: ""
-            )
-            "message.complete" -> {
-                val reasoning = payload?.get("reasoning")?.jsonPrimitive?.content ?: ""
-                GatewayEvent.MessageComplete(
-                    id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                    reasoning = reasoning
-                )
-            }
-            "reasoning.delta" -> GatewayEvent.ReasoningDelta(
-                text = payload?.get("text")?.jsonPrimitive?.content ?: ""
-            )
-            "thinking.delta" -> GatewayEvent.ThinkingDelta(
-                text = payload?.get("text")?.jsonPrimitive?.content ?: ""
-            )
-            "reasoning.available" -> GatewayEvent.ReasoningAvailable(
-                text = payload?.get("text")?.jsonPrimitive?.content ?: ""
-            )
-            "tool.start" -> {
-                // Hermes 发送 context / args_text，没有 args 字段
-                val argsString = payload?.get("args_text")?.jsonPrimitive?.content
-                    ?: payload?.get("context")?.jsonPrimitive?.content
-                    ?: ""
-                GatewayEvent.ToolStart(
-                    toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
-                    name = payload?.get("name")?.jsonPrimitive?.content ?: "",
-                    args = argsString
-                )
-            }
-            "tool.progress" -> GatewayEvent.ToolProgress(
-                toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
-                text = payload?.get("text")?.jsonPrimitive?.content ?: ""
-            )
-            "tool.complete" -> {
-                // result 直接作为 JsonElement 传递，由 ChatRepository 负责序列化展示
-                val resultElement = payload?.get("result")
-                GatewayEvent.ToolComplete(
-                    toolId = payload?.get("tool_id")?.jsonPrimitive?.content ?: "",
-                    name = payload?.get("name")?.jsonPrimitive?.content ?: "",
-                    result = resultElement,
-                    duration = payload?.get("duration_s")?.jsonPrimitive?.content?.toFloatOrNull(),
-                    summary = payload?.get("summary")?.jsonPrimitive?.content ?: ""
-                )
-            }
-            "approval.request" -> GatewayEvent.ApprovalRequest(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                toolName = payload?.get("tool_name")?.jsonPrimitive?.content ?: "",
-                input = emptyMap()
-            )
-            "clarify.request" -> GatewayEvent.ClarifyRequest(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                question = payload?.get("question")?.jsonPrimitive?.content ?: ""
-            )
-            "secret.request" -> GatewayEvent.SecretRequest(
-                id = payload?.get("id")?.jsonPrimitive?.content ?: "",
-                prompt = payload?.get("prompt")?.jsonPrimitive?.content ?: ""
-            )
-            "error" -> GatewayEvent.ErrorEvent(
-                message = payload?.get("message")?.jsonPrimitive?.content ?: ""
-            )
-            else -> null
+    /**
+     * 将 JSON-RPC 事件参数转换为 GatewayEventSerializer 可处理的格式。
+     * Hermes 网关发送的格式：{"type": "message.delta", "session_id": "...", "payload": {...}}
+     * 序列化器期望的格式：{"type": "message.delta", ...payload字段展开到顶层}
+     */
+    private fun transformEventParams(params: JsonObject): JsonObject {
+        val eventType = params["type"]?.jsonPrimitive?.content ?: return params
+        val payload = params["payload"]?.jsonObject ?: JsonObject(emptyMap())
+        return buildJsonObject {
+            put("type", eventType)
+            payload.forEach { (key, value) -> put(key, value) }
         }
     }
 }

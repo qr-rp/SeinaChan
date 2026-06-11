@@ -116,13 +116,13 @@ fun ToolCallCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 4.dp)
-                                .background(color = MaterialTheme.colorScheme.inverseSurface, shape = AppShapes.xs)
+                                .background(color = MaterialTheme.colorScheme.surface, shape = AppShapes.xs)
                                 .padding(8.dp)
                         ) {
                             Text(
                                 text = toolCall.args,
                                 style = TextStyles.bodySm,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontFamily = FontFamily.Monospace
                             )
                         }
@@ -140,13 +140,13 @@ fun ToolCallCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 4.dp)
-                                .background(color = MaterialTheme.colorScheme.inverseSurface, shape = AppShapes.xs)
+                                .background(color = MaterialTheme.colorScheme.surface, shape = AppShapes.xs)
                                 .padding(8.dp)
                         ) {
                             Text(
                                 text = toolCall.result,
                                 style = TextStyles.bodySm,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontFamily = FontFamily.Monospace
                             )
                         }

@@ -1,14 +1,19 @@
 package com.seina.chan.data.repository
 
 import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
+import com.seina.chan.data.local.dao.MessageDao
 import com.seina.chan.data.local.dao.SentImageDao
+import com.seina.chan.data.local.entity.MessageEntity
 import com.seina.chan.data.local.entity.SentImageEntity
 import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.data.model.ToolCallDetail
 import com.seina.chan.data.model.ToolCallStatus
 import com.seina.chan.data.remote.GatewayEvent
+import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
 import kotlinx.coroutines.CoroutineScope
@@ -19,22 +24,30 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.io.ByteArrayOutputStream
 
 class ChatRepository(
     private val wsClient: HermesWsClient,
-    private val sentImageDao: SentImageDao
+    private val sentImageDao: SentImageDao,
+    private val messageDao: MessageDao
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
 
     val events = wsClient.events
+
+    private var currentSessionId: String? = null
 
     init {
         wsClient.events.onEach { event ->
@@ -43,12 +56,16 @@ class ChatRepository(
     }
 
     suspend fun sendMessage(text: String, sessionId: String) {
+        currentSessionId = sessionId
         // 结束所有未完成的 assistant 消息，避免积累空消息
         _messages.value = _messages.value.map {
             if (it.isStreaming && it.role == "assistant") {
-                it.copy(isStreaming = false, isReasoning = false)
+                finalizeToolCallsInMessage(
+                    it.copy(isStreaming = false, isReasoning = false)
+                )
             } else it
         }
+        persistMessages()
 
         val userMessage = ChatMessage(
             id = java.util.UUID.randomUUID().toString(),
@@ -57,12 +74,13 @@ class ChatRepository(
             isStreaming = false
         )
         _messages.value += userMessage
+        persistMessage(userMessage)
 
         val params = buildJsonObject {
             put("session_id", sessionId)
             put("text", text)
         }
-        wsClient.request("prompt.submit", params)
+        wsClient.request(HermesMethods.PROMPT_SUBMIT, params)
     }
 
     /**
@@ -72,18 +90,34 @@ class ChatRepository(
      * @param sessionId 会话 ID
      */
     suspend fun sendImage(imageUri: Uri, contentResolver: ContentResolver, sessionId: String) {
+        currentSessionId = sessionId
         // 结束所有未完成的 assistant 消息，避免积累空消息
         _messages.value = _messages.value.map {
             if (it.isStreaming && it.role == "assistant") {
-                it.copy(isStreaming = false, isReasoning = false)
+                finalizeToolCallsInMessage(
+                    it.copy(isStreaming = false, isReasoning = false)
+                )
             } else it
         }
+        persistMessages()
 
-        // 读取图片并转为 base64
-        val base64Data = withContext(Dispatchers.IO) {
+        // 读取图片并转为 base64（大图片自动压缩，非 JPEG 小图片转为 JPEG）
+        val (base64Data, mimeType) = withContext(Dispatchers.IO) {
             contentResolver.openInputStream(imageUri)?.use { inputStream ->
                 val bytes = inputStream.readBytes()
-                Base64.encodeToString(bytes, Base64.NO_WRAP)
+                if (bytes.size <= 1_048_576) {
+                    // 小图片：检测 MIME 类型，非 JPEG 则转为 JPEG
+                    val detectedMime = contentResolver.getType(imageUri) ?: "image/jpeg"
+                    if (detectedMime == "image/jpeg" || detectedMime == "image/jpg") {
+                        Pair(Base64.encodeToString(bytes, Base64.NO_WRAP), "image/jpeg")
+                    } else {
+                        // PNG/WebP 等格式转为 JPEG
+                        Pair(compressImage(bytes), "image/jpeg")
+                    }
+                } else {
+                    // 大图片压缩
+                    Pair(compressImage(bytes), "image/jpeg")
+                }
             } ?: throw IllegalArgumentException("无法读取图片")
         }
 
@@ -96,15 +130,16 @@ class ChatRepository(
             imageUrl = imageUri.toString()
         )
         _messages.value += userMessage
+        persistMessage(userMessage)
 
         // 构造 data URI
-        val dataUri = "data:image/jpeg;base64,$base64Data"
+        val dataUri = "data:$mimeType;base64,$base64Data"
         val params = buildJsonObject {
             put("session_id", sessionId)
             put("data", dataUri)
             put("name", "image.jpg")
         }
-        val result = wsClient.request("image.attach_bytes", params)
+        val result = wsClient.request(HermesMethods.IMAGE_ATTACH_BYTES, params)
         if (result is JsonObject) {
             val serverPath = result["path"]?.jsonPrimitive?.content
             if (serverPath != null) {
@@ -126,7 +161,7 @@ class ChatRepository(
             put("session_id", sessionId)
             put("text", "")
         }
-        wsClient.request("prompt.submit", params)
+        wsClient.request(HermesMethods.PROMPT_SUBMIT, params)
     }
 
     suspend fun respondApproval(requestId: String, approved: Boolean) {
@@ -134,7 +169,7 @@ class ChatRepository(
             put("requestId", requestId)
             put("approved", approved)
         }
-        wsClient.request("approval.respond", params)
+        wsClient.request(HermesMethods.APPROVAL_RESPOND, params)
     }
 
     suspend fun respondClarify(requestId: String, response: String) {
@@ -142,7 +177,7 @@ class ChatRepository(
             put("requestId", requestId)
             put("response", response)
         }
-        wsClient.request("clarify.respond", params)
+        wsClient.request(HermesMethods.CLARIFY_RESPOND, params)
     }
 
     suspend fun respondSecret(requestId: String, secret: String) {
@@ -150,7 +185,7 @@ class ChatRepository(
             put("requestId", requestId)
             put("secret", secret)
         }
-        wsClient.request("secret.respond", params)
+        wsClient.request(HermesMethods.SECRET_RESPOND, params)
     }
 
     fun clearMessages() {
@@ -158,7 +193,29 @@ class ChatRepository(
     }
 
     fun setMessages(messages: List<ChatMessage>) {
+        // 如果正在流式接收 AI 回复，跳过覆盖以避免打断实时显示
+        val hasStreaming = _messages.value.any { it.isStreaming && it.role == "assistant" }
+        if (hasStreaming) {
+            FileLogger.i("ChatRepository", "跳过 setMessages：正在流式接收消息")
+            return
+        }
         _messages.value = messages
+        persistMessages()
+    }
+
+    /**
+     * 从 Room 缓存加载指定会话的消息，并设置为当前消息列表。
+     * @return 缓存中的消息列表，如果无缓存则返回空列表
+     */
+    suspend fun loadCachedMessages(sessionId: String): List<ChatMessage> {
+        currentSessionId = sessionId
+        val entities = withContext(Dispatchers.IO) {
+            messageDao.getBySessionId(sessionId)
+        }
+        val cached = entities.map { it.toChatMessage() }
+        _messages.value = cached
+        FileLogger.i("ChatRepository", "从缓存加载 ${cached.size} 条消息 (sessionId=$sessionId)")
+        return cached
     }
 
     private fun handleEvent(event: GatewayEvent) {
@@ -174,6 +231,7 @@ class ChatRepository(
                             )
                         } else it
                     }
+                    persistMessages()
                     val msgId = event.id.ifBlank { java.util.UUID.randomUUID().toString() }
                     val msg = ChatMessage(
                         id = msgId,
@@ -183,6 +241,7 @@ class ChatRepository(
                         isReasoning = true
                     )
                     _messages.value += msg
+                    persistMessage(msg)
                 }
                 is GatewayEvent.MessageDelta -> {
                     updateLastStreamingAssistantMessage { msg ->
@@ -202,6 +261,7 @@ class ChatRepository(
                             )
                         )
                         _messages.value = messages
+                        persistMessage(messages[index])
                     }
                 }
                 is GatewayEvent.ReasoningDelta -> {
@@ -301,14 +361,19 @@ class ChatRepository(
         if (index >= 0) {
             messages[index] = messages[index].copy(toolCalls = messages[index].toolCalls + toolCall)
             _messages.value = messages
+            persistMessage(messages[index])
         }
     }
 
     private fun updateToolCall(id: String, transform: (ToolCallDetail) -> ToolCallDetail) {
         _messages.value = _messages.value.map { msg ->
-            msg.copy(toolCalls = msg.toolCalls.map {
+            val updated = msg.copy(toolCalls = msg.toolCalls.map {
                 if (it.id == id) transform(it) else it
             })
+            if (updated.toolCalls != msg.toolCalls) {
+                persistMessage(updated)
+            }
+            updated
         }
     }
 
@@ -326,5 +391,143 @@ class ChatRepository(
             } else it
         }
         return msg.copy(toolCalls = finalized)
+    }
+
+    // ==================== 持久化相关 ====================
+
+    /**
+     * 将单条消息持久化到 Room
+     */
+    private fun persistMessage(message: ChatMessage) {
+        val sid = currentSessionId ?: return
+        scope.launch {
+            try {
+                messageDao.upsert(message.toEntity(sid))
+            } catch (e: Exception) {
+                FileLogger.e("ChatRepository", "持久化消息失败: ${message.id}", e)
+            }
+        }
+    }
+
+    /**
+     * 将当前所有消息持久化到 Room（用于 setMessages 等批量场景）
+     */
+    private fun persistMessages() {
+        val sid = currentSessionId ?: return
+        val msgs = _messages.value
+        scope.launch {
+            try {
+                messageDao.upsertAll(msgs.map { it.toEntity(sid) })
+            } catch (e: Exception) {
+                FileLogger.e("ChatRepository", "批量持久化消息失败", e)
+            }
+        }
+    }
+
+    /**
+     * ChatMessage → MessageEntity
+     */
+    private fun ChatMessage.toEntity(sessionId: String): MessageEntity {
+        return MessageEntity(
+            id = id,
+            sessionId = sessionId,
+            role = role,
+            content = content,
+            reasoningText = reasoningText,
+            isReasoning = isReasoning,
+            imageUrl = imageUrl,
+            toolCallsJson = json.encodeToString(
+                kotlinx.serialization.serializer<List<ToolCallDetail>>(),
+                toolCalls
+            ),
+            systemEventsJson = json.encodeToString(
+                kotlinx.serialization.serializer<List<String>>(),
+                systemEvents
+            ),
+            isStreaming = isStreaming,
+            createdAt = try {
+                id.toLong()
+            } catch (_: NumberFormatException) {
+                System.currentTimeMillis()
+            },
+            updatedAt = System.currentTimeMillis()
+        )
+    }
+
+    /**
+     * MessageEntity → ChatMessage
+     */
+    private fun MessageEntity.toChatMessage(): ChatMessage {
+        val toolCalls = try {
+            json.decodeFromString(
+                kotlinx.serialization.serializer<List<ToolCallDetail>>(),
+                toolCallsJson
+            )
+        } catch (e: Exception) {
+            FileLogger.e("ChatRepository", "反序列化 toolCalls 失败: $toolCallsJson", e)
+            emptyList()
+        }
+        val systemEvents = try {
+            json.decodeFromString(
+                kotlinx.serialization.serializer<List<String>>(),
+                systemEventsJson
+            )
+        } catch (e: Exception) {
+            FileLogger.e("ChatRepository", "反序列化 systemEvents 失败: $systemEventsJson", e)
+            emptyList()
+        }
+        return ChatMessage(
+            id = id,
+            role = role,
+            content = content,
+            isStreaming = isStreaming,
+            reasoningText = reasoningText,
+            isReasoning = isReasoning,
+            toolCalls = toolCalls,
+            imageUrl = imageUrl,
+            systemEvents = systemEvents
+        )
+    }
+
+    // ==================== 图片压缩 ====================
+    private fun compressImage(bytes: ByteArray): String {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+
+        val targetMaxWidth = 1920
+        val inSampleSize = calculateInSampleSize(options, targetMaxWidth)
+
+        val decodeOptions = BitmapFactory.Options().apply {
+            this.inSampleSize = inSampleSize
+        }
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+            ?: throw IllegalArgumentException("无法解码图片")
+
+        // 精确缩放
+        val scaledBitmap = if (bitmap.width > targetMaxWidth) {
+            val scaleFactor = targetMaxWidth.toFloat() / bitmap.width
+            val newHeight = (bitmap.height * scaleFactor).toInt()
+            Bitmap.createScaledBitmap(bitmap, targetMaxWidth, newHeight, true).also {
+                if (it !== bitmap) bitmap.recycle()
+            }
+        } else bitmap
+
+        val outputStream = ByteArrayOutputStream()
+        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+        scaledBitmap.recycle()
+
+        return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+    }
+
+    /**
+     * 计算 BitmapFactory 的 inSampleSize，使解码后宽度不超过 targetMaxWidth 的 2 倍
+     */
+    private fun calculateInSampleSize(options: BitmapFactory.Options, targetMaxWidth: Int): Int {
+        val width = options.outWidth
+        var inSampleSize = 1
+        while (width / inSampleSize > targetMaxWidth * 2) {
+            inSampleSize *= 2
+        }
+        return inSampleSize
     }
 }

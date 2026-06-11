@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import com.seina.chan.data.local.AppDatabase
+import com.seina.chan.data.local.dao.MessageDao
 import com.seina.chan.data.local.dao.SentImageDao
 import com.seina.chan.data.remote.HermesApiService
 import com.seina.chan.data.remote.HermesWsClient
@@ -14,6 +15,7 @@ import com.seina.chan.data.repository.ChatRepository
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
 import com.seina.chan.data.repository.SettingsRepository
+import com.seina.chan.util.NetworkMonitor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -58,6 +60,7 @@ object AppModule {
             config {
                 connectTimeout(30_000, TimeUnit.MILLISECONDS)
                 readTimeout(30_000, TimeUnit.MILLISECONDS)
+                pingInterval(20, TimeUnit.SECONDS)
             }
         }
     }
@@ -72,8 +75,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideHermesWsClient(client: HttpClient, json: Json): HermesWsClient {
-        return HermesWsClient(client, json)
+    fun provideHermesWsClient(client: HttpClient, json: Json, networkMonitor: NetworkMonitor): HermesWsClient {
+        return HermesWsClient(client, json, networkMonitor)
     }
 
     @Provides
@@ -100,13 +103,20 @@ object AppModule {
             context,
             AppDatabase::class.java,
             "seina_chan_db"
-        ).build()
+        ).addMigrations(AppDatabase.MIGRATION_1_2)
+            .build()
     }
 
     @Provides
     @Singleton
     fun provideSentImageDao(database: AppDatabase): SentImageDao {
         return database.sentImageDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideMessageDao(database: AppDatabase): MessageDao {
+        return database.messageDao()
     }
 
     @Provides
@@ -123,9 +133,10 @@ object AppModule {
     @Singleton
     fun provideChatRepository(
         wsClient: HermesWsClient,
-        sentImageDao: SentImageDao
+        sentImageDao: SentImageDao,
+        messageDao: MessageDao
     ): ChatRepository {
-        return ChatRepository(wsClient, sentImageDao)
+        return ChatRepository(wsClient, sentImageDao, messageDao)
     }
 
     @Provides

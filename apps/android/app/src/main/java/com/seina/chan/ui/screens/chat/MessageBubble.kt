@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.seina.chan.data.model.ChatMessage
+import com.seina.chan.ui.components.MarkdownText
 import com.seina.chan.ui.theme.AppShapes
 import com.seina.chan.ui.theme.TextStyles
 
@@ -112,11 +113,19 @@ fun MessageBubble(
                                 )
                             }
                             if (message.content.isNotBlank() && !isImageContent(message.content)) {
-                                Text(
-                                    text = message.content,
-                                    style = TextStyles.bodyMd,
-                                    color = if (isUser) Color.White else MaterialTheme.colorScheme.onBackground
-                                )
+                                if (isUser) {
+                                    Text(
+                                        text = message.content,
+                                        style = TextStyles.bodyMd,
+                                        color = Color.White
+                                    )
+                                } else {
+                                    MarkdownText(
+                                        content = message.content,
+                                        style = TextStyles.bodyMd,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    )
+                                }
                             }
                         }
                     }

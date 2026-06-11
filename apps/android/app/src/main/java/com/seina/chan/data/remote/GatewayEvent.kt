@@ -11,11 +11,11 @@ import kotlinx.serialization.json.jsonPrimitive
 @Serializable(GatewayEventSerializer::class)
 sealed class GatewayEvent {
     @Serializable
-    @SerialName("gateway.ready")
+    @SerialName(HermesEventTypes.GATEWAY_READY)
     data object GatewayReady : GatewayEvent()
 
     @Serializable
-    @SerialName("session.info")
+    @SerialName(HermesEventTypes.SESSION_INFO)
     data class SessionInfo(
         val id: String,
         val title: String? = null
@@ -24,125 +24,129 @@ sealed class GatewayEvent {
     @Serializable
     @SerialName("message.start")
     data class MessageStart(
-        val id: String,
-        val parentId: String? = null,
-        val role: String
+        val id: String = "",
+        @SerialName("parent_id") val parentId: String? = null,
+        val role: String = "assistant"
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("message.delta")
+    @SerialName(HermesEventTypes.MESSAGE_DELTA)
     data class MessageDelta(
-        val id: String,
-        val delta: String
+        val id: String = "",
+        @SerialName("text") val delta: String
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("message.complete")
+    @SerialName(HermesEventTypes.MESSAGE_COMPLETE)
     data class MessageComplete(
-        val id: String,
+        val id: String = "",
         val reasoning: String = ""
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("reasoning.delta")
+    @SerialName(HermesEventTypes.REASONING_DELTA)
     data class ReasoningDelta(
         val text: String
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("thinking.delta")
+    @SerialName(HermesEventTypes.THINKING_DELTA)
     data class ThinkingDelta(
         val text: String
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("reasoning.available")
+    @SerialName(HermesEventTypes.REASONING_AVAILABLE)
     data class ReasoningAvailable(
         val text: String
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("tool.start")
+    @SerialName(HermesEventTypes.TOOL_START)
     data class ToolStart(
-        val toolId: String,
+        @SerialName("tool_id") val toolId: String,
         val name: String,
-        val args: String = "",
-        val context: String = ""
+        @SerialName("args_text") val args: String = "",
+        @SerialName("context") val context: String = ""
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("tool.progress")
+    @SerialName(HermesEventTypes.TOOL_PROGRESS)
     data class ToolProgress(
-        val toolId: String,
+        @SerialName("tool_id") val toolId: String,
         val text: String
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("tool.complete")
+    @SerialName(HermesEventTypes.TOOL_COMPLETE)
     data class ToolComplete(
-        val toolId: String,
+        @SerialName("tool_id") val toolId: String,
         val name: String,
         val result: JsonElement? = null,
-        val duration: Float? = null,
+        @SerialName("duration_s") val duration: Float? = null,
         val summary: String = ""
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("approval.request")
+    @SerialName(HermesEventTypes.APPROVAL_REQUEST)
     data class ApprovalRequest(
         val id: String,
-        val toolName: String,
+        @SerialName("tool_name") val toolName: String,
         val input: Map<String, String> = emptyMap()
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("clarify.request")
+    @SerialName(HermesEventTypes.CLARIFY_REQUEST)
     data class ClarifyRequest(
         val id: String,
         val question: String
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("secret.request")
+    @SerialName(HermesEventTypes.SECRET_REQUEST)
     data class SecretRequest(
         val id: String,
         val prompt: String
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("review.summary")
+    @SerialName(HermesEventTypes.REVIEW_SUMMARY)
     data class ReviewSummary(
         val text: String
     ) : GatewayEvent()
 
     @Serializable
-    @SerialName("error")
+    @SerialName(HermesEventTypes.ERROR)
     data class ErrorEvent(
         val message: String
     ) : GatewayEvent()
 }
 
+/**
+ * 统一事件反序列化器，根据 JSON 中的 "type" 字段路由到具体的 GatewayEvent 子类。
+ * 输入格式：{"type": "message.delta", "id": "...", "text": "..."}
+ */
 object GatewayEventSerializer : JsonContentPolymorphicSerializer<GatewayEvent>(GatewayEvent::class) {
     override fun selectDeserializer(element: JsonElement): DeserializationStrategy<GatewayEvent> {
-        val event = element.jsonObject["event"]?.jsonPrimitive?.content
-        return when (event) {
-            "gateway.ready" -> GatewayEvent.GatewayReady.serializer()
-            "session.info" -> GatewayEvent.SessionInfo.serializer()
-            "message.start" -> GatewayEvent.MessageStart.serializer()
-            "message.delta" -> GatewayEvent.MessageDelta.serializer()
-            "message.complete" -> GatewayEvent.MessageComplete.serializer()
-            "reasoning.delta" -> GatewayEvent.ReasoningDelta.serializer()
-            "thinking.delta" -> GatewayEvent.ThinkingDelta.serializer()
-            "reasoning.available" -> GatewayEvent.ReasoningAvailable.serializer()
-            "tool.start" -> GatewayEvent.ToolStart.serializer()
-            "tool.progress" -> GatewayEvent.ToolProgress.serializer()
-            "tool.complete" -> GatewayEvent.ToolComplete.serializer()
-            "approval.request" -> GatewayEvent.ApprovalRequest.serializer()
-            "clarify.request" -> GatewayEvent.ClarifyRequest.serializer()
-            "secret.request" -> GatewayEvent.SecretRequest.serializer()
-            "review.summary" -> GatewayEvent.ReviewSummary.serializer()
-            "error" -> GatewayEvent.ErrorEvent.serializer()
-            else -> throw IllegalArgumentException("Unknown event type: $event")
+        val eventType = element.jsonObject["type"]?.jsonPrimitive?.content
+        return when (eventType) {
+            HermesEventTypes.GATEWAY_READY -> GatewayEvent.GatewayReady.serializer()
+            HermesEventTypes.SESSION_INFO -> GatewayEvent.SessionInfo.serializer()
+            HermesEventTypes.MESSAGE_START -> GatewayEvent.MessageStart.serializer()
+            HermesEventTypes.MESSAGE_DELTA -> GatewayEvent.MessageDelta.serializer()
+            HermesEventTypes.MESSAGE_COMPLETE -> GatewayEvent.MessageComplete.serializer()
+            HermesEventTypes.REASONING_DELTA -> GatewayEvent.ReasoningDelta.serializer()
+            HermesEventTypes.THINKING_DELTA -> GatewayEvent.ThinkingDelta.serializer()
+            HermesEventTypes.REASONING_AVAILABLE -> GatewayEvent.ReasoningAvailable.serializer()
+            HermesEventTypes.TOOL_START -> GatewayEvent.ToolStart.serializer()
+            HermesEventTypes.TOOL_PROGRESS -> GatewayEvent.ToolProgress.serializer()
+            HermesEventTypes.TOOL_COMPLETE -> GatewayEvent.ToolComplete.serializer()
+            HermesEventTypes.APPROVAL_REQUEST -> GatewayEvent.ApprovalRequest.serializer()
+            HermesEventTypes.CLARIFY_REQUEST -> GatewayEvent.ClarifyRequest.serializer()
+            HermesEventTypes.SECRET_REQUEST -> GatewayEvent.SecretRequest.serializer()
+            HermesEventTypes.REVIEW_SUMMARY -> GatewayEvent.ReviewSummary.serializer()
+            HermesEventTypes.ERROR -> GatewayEvent.ErrorEvent.serializer()
+            else -> throw IllegalArgumentException("Unknown event type: $eventType")
         }
     }
 }

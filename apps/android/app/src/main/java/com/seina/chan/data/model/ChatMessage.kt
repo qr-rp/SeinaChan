@@ -1,5 +1,8 @@
 package com.seina.chan.data.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class ChatMessage(
     val id: String,
     val role: String,
@@ -12,6 +15,7 @@ data class ChatMessage(
     val systemEvents: List<String> = emptyList()
 )
 
+@Serializable
 data class ToolCallDetail(
     val id: String,
     val name: String,
@@ -22,6 +26,7 @@ data class ToolCallDetail(
     val summary: String = ""
 )
 
+@Serializable
 enum class ToolCallStatus {
     Running,
     Success,

@@ -22,7 +22,9 @@ data class SettingsUiState(
     val connectionIp: String = "",
     val connectionPort: String = "",
     val connectionToken: String = "",
-    val hiddenToolNames: Set<String> = emptySet()
+    val hiddenToolNames: Set<String> = emptySet(),
+    /** 自定义工具链，格式为 "category|tool_name" */
+    val customTools: Set<String> = emptySet()
 )
 
 @HiltViewModel
@@ -88,6 +90,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.hiddenToolNames.collect { value ->
                 _uiState.update { it.copy(hiddenToolNames = value) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.customTools.collect { value ->
+                _uiState.update { it.copy(customTools = value) }
             }
         }
     }
@@ -156,6 +163,33 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setHiddenToolNames(value)
         }
+    }
+
+    fun setCustomTools(value: Set<String>) {
+        viewModelScope.launch {
+            settingsRepository.setCustomTools(value)
+        }
+    }
+
+    /** 添加自定义工具链 */
+    fun addCustomTool(category: String, toolName: String) {
+        val entry = "$category|$toolName"
+        val current = _uiState.value.customTools
+        if (entry !in current) {
+            setCustomTools(current + entry)
+        }
+    }
+
+    /** 删除自定义工具链 */
+    fun removeCustomTool(category: String, toolName: String) {
+        val entry = "$category|$toolName"
+        val current = _uiState.value.customTools
+        // 同时从隐藏列表中移除
+        val hidden = _uiState.value.hiddenToolNames
+        if (toolName in hidden) {
+            setHiddenToolNames(hidden - toolName)
+        }
+        setCustomTools(current - entry)
     }
 
     fun disconnect() {

@@ -256,18 +256,37 @@ class ChatViewModel @Inject constructor(
                 FileLogger.w("ChatViewModel", "loadMessages() failed to save dbSessionId: ${e.message}")
             }
         }
-        chatRepository.clearMessages()
         _inputState.update { it.copy(isLoading = true, error = null) }
+
+        // 先从 Room 缓存加载，立即展示
+        viewModelScope.launch {
+            try {
+                val cached = chatRepository.loadCachedMessages(dbSessionId)
+                if (cached.isNotEmpty()) {
+                    FileLogger.i("ChatViewModel", "loadMessages() showed ${cached.size} cached messages")
+                    _inputState.update { it.copy(isLoading = false, error = null) }
+                }
+            } catch (e: Exception) {
+                FileLogger.w("ChatViewModel", "loadMessages() cache load failed: ${e.message}")
+            }
+        }
+
+        // 后台从服务端拉取最新消息
         viewModelScope.launch {
             try {
                 val history = sessionRepository.fetchMessages(dbSessionId)
-                FileLogger.i("ChatViewModel", "loadMessages() loaded ${history.size} messages")
+                FileLogger.i("ChatViewModel", "loadMessages() fetched ${history.size} messages from server")
                 chatRepository.setMessages(history)
-                // 空会话不设置 error，保持 error = null，由 UI 判断显示空状态提示
                 _inputState.update { it.copy(isLoading = false, error = null) }
             } catch (e: Exception) {
-                FileLogger.e("ChatViewModel", "loadMessages() failed", e)
-                _inputState.update { it.copy(isLoading = false, error = "加载历史消息失败: ${e.message}") }
+                FileLogger.e("ChatViewModel", "loadMessages() server fetch failed", e)
+                // 如果缓存为空且服务端也失败，显示错误
+                if (chatRepository.messages.value.isEmpty()) {
+                    _inputState.update { it.copy(isLoading = false, error = "加载历史消息失败: ${e.message}") }
+                } else {
+                    // 有缓存时仅降级提示，不覆盖已展示的内容
+                    _inputState.update { it.copy(isLoading = false) }
+                }
             }
         }
     }

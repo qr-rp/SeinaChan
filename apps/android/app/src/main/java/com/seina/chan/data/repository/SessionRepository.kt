@@ -7,6 +7,7 @@ import com.seina.chan.data.model.Session
 import com.seina.chan.data.model.ToolCallDetail
 import com.seina.chan.data.model.ToolCallStatus
 import com.seina.chan.data.remote.HermesApiService
+import com.seina.chan.data.remote.HermesMethods
 import com.seina.chan.data.remote.HermesWsClient
 import com.seina.chan.util.FileLogger
 import kotlinx.serialization.json.JsonArray
@@ -185,7 +186,7 @@ class SessionRepository(
     }
 
     suspend fun createSession(): CreateSessionResult {
-        val result = wsClient.request("session.create")
+        val result = wsClient.request(HermesMethods.SESSION_CREATE)
         val sid = when {
             result is JsonObject && result.containsKey("session_id") -> result["session_id"]!!.jsonPrimitive.content
             result is JsonObject && result.containsKey("id") -> result["id"]!!.jsonPrimitive.content
@@ -204,7 +205,7 @@ class SessionRepository(
         val params = buildJsonObject {
             put("session_id", sessionId)
         }
-        val result = wsClient.request("session.resume", params)
+        val result = wsClient.request(HermesMethods.SESSION_RESUME, params)
         return when {
             result is JsonObject && result.containsKey("session_id") -> result["session_id"]!!.jsonPrimitive.content
             else -> result.toString()
