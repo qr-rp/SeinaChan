@@ -70,6 +70,19 @@ class ChatViewModel @Inject constructor(
                 previousState = state
             }
         }
+        // 应用重建后若 WebSocket 已是 Open，立即 resume（避免 previousState 初始为 Idle 导致漏过状态变化）
+        if (wsClient.state.value is ConnectionState.Open && currentDbSessionId.isNotEmpty()) {
+            viewModelScope.launch {
+                FileLogger.i("ChatViewModel", "App recreated with open WebSocket, resuming session=$currentDbSessionId")
+                try {
+                    val sid = sessionRepository.resumeSession(currentDbSessionId)
+                    currentWsSessionId = sid
+                    FileLogger.i("ChatViewModel", "Immediate resume after recreation succeeded, sid=$sid")
+                } catch (e: Exception) {
+                    FileLogger.w("ChatViewModel", "Immediate resume after recreation failed: ${e.message}")
+                }
+            }
+        }
         viewModelScope.launch {
             settingsRepository.showToolCalls.collect { value ->
                 _inputState.update { it.copy(showToolCalls = value) }

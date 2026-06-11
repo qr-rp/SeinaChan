@@ -12,7 +12,7 @@ SeinaChan/
 │   └── gradle/libs.versions.toml  # Version catalog (single source of truth)
 │
 ├── hermes-agent/               # Git submodule (gitignored, NOT part of build)
-├── .trae/                      # Planning specs from Trae IDE
+├── .trae/                      # Planning specs from Trae IDE (gitignored)
 ├── DESIGN.md                   # Claude.com design system reference (gitignored)
 └── test_hermes_api.py          # Local Hermes API test script (gitignored)
 ```
@@ -40,7 +40,9 @@ cd apps/android
 - **compileSdk = 35**, **minSdk = 26**, **targetSdk = 35**
 - **Kotlin 2.0.21**, **AGP 8.7.3**, **Compose BOM 2024.12.01**
 - Aliyun Maven mirrors configured in `settings.gradle.kts` for Chinese network access. No proxy switch needed — they're always-on fallbacks before google/mavenCentral.
-- `org.gradle.jvmargs=-Xmx4096m` in `gradle.properties` — Gradle daemon needs sufficient heap.
+- `org.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8` in `gradle.properties` — Gradle daemon needs sufficient heap.
+- `org.gradle.parallel=true` and `org.gradle.caching=true` are enabled.
+- `kotlin.code.style=official` (no wildcard imports in official style).
 
 ---
 
@@ -48,14 +50,15 @@ cd apps/android
 
 | Layer | Choice | Notes |
 |---|---|---|
-| UI | Jetpack Compose + Material3 | `material3` from BOM |
+| UI | Jetpack Compose + Material3 | `material3` from BOM; adaptive layout + pull-to-refresh |
 | Architecture | MVI + ViewModel + Repository | Unidirectional data flow |
-| DI | Hilt | `hilt-android:2.54` + `hilt-navigation-compose:1.2.0` |
+| DI | Hilt | `hilt-android:2.54` + `hilt-navigation-compose:1.2.0`; uses **kapt**, not KSP |
 | Network | Ktor Client 3.0.3 | OkHttp engine, WebSocket support |
 | Serialization | Kotlinx Serialization 1.7.3 | `kotlinx.serialization.json` |
 | Async | Kotlin Coroutines + Flow | StateFlow for UI state, SharedFlow for events |
 | Image loading | Coil 2.6.0 | Compose-native |
-| Local storage | DataStore Preferences | Connection config + session persistence |
+| Local persistence | DataStore Preferences + Room (SQLite) | DataStore for settings/config; Room for messages (`MessageEntity`, `SentImageEntity`) |
+| Navigation | Navigation Compose 2.8.5 | Three routes: `connect`, `chat`, `settings` |
 
 ---
 
@@ -64,16 +67,31 @@ cd apps/android
 ### Package Layout (`apps/android/app/src/main/java/com/seina/chan/`)
 
 ```
-di/AppModule.kt              # Hilt module — provides HttpClient singleton
+SeinaChanApplication.kt      # @HiltAndroidApp — initializes FileLogger + UncaughtExceptionHandler
+MainActivity.kt              # @AndroidEntryPoint — binds HermesConnectionService, applies theme
+di/
+  AppModule.kt               # Hilt module — provides HttpClient, DataStore, HermesWsClient, AppDatabase, all repositories
 data/
   remote/
-    HermesWsClient.kt         # WebSocket JSON-RPC client (ConnectionState + events Flow)
+    HermesWsClient.kt         # WebSocket JSON-RPC client (ConnectionState + SharedFlow of GatewayEvent)
     HermesApiService.kt       # REST API: sessions, messages, status, model info
-    GatewayEvent.kt           # JSON-RPC event data classes (message.delta, tool.*, etc.)
+    HermesMethods.kt          # JSON-RPC method constants (session.create, prompt.submit, etc.)
+    HermesEventTypes.kt       # Gateway event type constants (message.delta, tool.*, approval.*, etc.)
+    GatewayEvent.kt           # Data classes for all JSON-RPC event payloads
+    JsonRpcProtocol.kt        # Generic JSON-RPC request/response/event data classes
+  local/
+    AppDatabase.kt            # Room database — version 2, with MIGRATION_1_2
+    dao/
+      MessageDao.kt           # CRUD for messages table (upsert, query by sessionId, delete)
+      SentImageDao.kt         # Lookup local URI from server path for sent images
+    entity/
+      MessageEntity.kt        # Messages: id, sessionId, role, content, reasoningText, toolCallsJson, etc.
+      SentImageEntity.kt      # serverPath → localUri mapping for image-attach tracking
   repository/
     ConnectionRepository.kt   # Connection URL, token, state management
-    SessionRepository.kt      # Session CRUD
-    ChatRepository.kt         # Send/receive messages, streaming, interactive events
+    SessionRepository.kt      # Session CRUD + upload sent images
+    ChatRepository.kt         # Send/receive messages, streaming, interactive events; owns MutableStateFlow<List<ChatMessage>>
+    SettingsRepository.kt     # DataStore-backed: theme, pagination, tool display, connection config, hidden tools, custom tools
   model/
     Session.kt
     ChatMessage.kt
@@ -82,17 +100,18 @@ service/
   HermesConnectionService.kt  # Foreground service — keeps WebSocket alive in background
 ui/
   theme/                      # DESIGN.md token system: Color.kt, Type.kt, Shape.kt, Spacing.kt, Theme.kt
-  components/                 # Reusable: SeinaButton, SeinaTextField, SeinaSnackbar, MessageBubble, etc.
+  components/                 # Reusable: SeinaButton, SeinaTextField, SnackbarHost, MessageBubble, Composer, ToolCallCard, dialogs, etc.
   screens/
     connect/                  # ConnectScreen — enter Hermes URL + token
-    chat/                     # ChatScreen — transcript + composer + dialogs
-    sessions/                 # SessionListScreen — mobile drawer / tablet list pane
-    settings/                 # SettingsScreen — model, tools, connection config
+    chat/                     # ChatScreen — transcript + tool calls + typing indicator
+    sessions/                 # SessionListScreen — session list + delete
+    settings/                 # SettingsScreen — theme, tools display, pagination, connection config, hidden/custom tools
   navigation/
-    SeinaNavHost.kt           # Routes: connect / chat / settings
-    AdaptivePane.kt           # Landscape split-pane (tablet) vs single-pane (phone)
+    SeinaNavHost.kt           # Three routes: connect / chat / settings; phone-only (no split pane)
 util/
   FileLogger.kt               # Custom file-based logger (NOT Android Logcat)
+  NetworkMonitor.kt           # ConnectivityManager-based StateFlow<Boolean> for internet availability
+  UncaughtExceptionHandler.kt # Logs fatal crashes to FileLogger then delegates to default handler
 ```
 
 ### MVI Flow
@@ -120,8 +139,26 @@ UI ← StateFlow<UiState> ← ViewModel ← Repository ← Flow<GatewayEvent>
 
 - `HermesConnectionService` keeps the WebSocket alive when the app is backgrounded.
 - `MainActivity` binds to it via `ServiceConnection` to share the same connection.
-- Notification shown when in background, removed when app returns to foreground (`onResume`/`onPause`).
+- Notification shown when in background, removed when app returns to foreground.
+- Actions sent via `startService()` intents: `ACTION_APP_FOREGROUND`, `ACTION_APP_BACKGROUND`, `ACTION_ENSURE_CONNECTION`.
 - Permissions required: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, `POST_NOTIFICATIONS`, `WAKE_LOCK`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+
+### Room Persistence
+
+- `AppDatabase` (version 2) has two tables:
+  - **`messages`**: `MessageEntity` with id, sessionId, role, content, reasoningText, isReasoning, imageUrl, toolCallsJson, systemEventsJson, isStreaming, createdAt, updatedAt.
+  - **`sent_images`**: `SentImageEntity` mapping `serverPath → localUri` for image-attach dedup.
+- `ChatRepository` uses `MessageDao` for persisting and restoring chat history.
+- `SessionRepository` uses `SentImageDao` for re-attaching previously sent images.
+- Migration from v1→v2 creates the `messages` table. Always add migrations rather than `fallbackToDestructiveMigration()`.
+
+### SettingsRepository (DataStore)
+
+DataStore preference file: `seina_chan_prefs`. Keys include:
+- `pageSize` (int, default 20), `showToolCalls` / `showReasoning` / `showTimestamps` / `autoExpandReasoning` / `autoExpandTools` (bool)
+- `themeMode` (string: "system" / "light" / "dark")
+- `ip`, `port`, `token` (strings — connection config)
+- `hidden_tool_names`, `custom_tools` (string sets — format `"category|tool_name"` for custom tools)
 
 ---
 
@@ -146,11 +183,13 @@ Token system in `ui/theme/` maps `DESIGN.md` to Compose:
 - **All Ktor artifacts use the same `3.0.3` version** from the catalog. Do not mix Ktor versions.
 - **Kotlin serialization plugin** (`kotlin.plugin.serialization`) must be applied alongside `kotlinx-serialization-json` library.
 - **Hilt uses `kapt`** (not KSP) in this project. The `kotlin("kapt")` plugin is applied in `app/build.gradle.kts`.
+- **Room also uses `kapt`** (`androidx.room:room-compiler`). This is already configured — do not switch to KSP.
 - **Foreground service** is required for reliable WebSocket persistence. Without it, Android kills the connection when the app is backgrounded.
-- **`FileLogger`** is the custom logger — not Logcat. Check `util/FileLogger.kt` for output location. It writes to the app's internal storage.
+- **`FileLogger`** is the custom logger — not Logcat. Check `util/FileLogger.kt` for output location. It writes to the app's internal storage. `UncaughtExceptionHandler` also logs crashes there before crashing.
 - **No root-level pyproject.toml or package.json.** Python files in the root (`test_hermes_api.py`) are standalone test scripts for local Hermes API debugging.
 - **`hermes-agent/` is a git submodule** with its own remote. Do not edit it as part of Seina Chan development — reference it for the Gateway protocol.
 - **No network_security_config.xml hardening**: the `@xml/network_security_config` allows cleartext HTTP for local/LAN Hermes instances (`ws://` URLs). Do not ship this to production without review.
+- **No split-pane / tablet layout**: The app uses simple NavHost phone navigation. `AdaptivePane.kt` does not exist.
 
 ---
 
@@ -174,4 +213,5 @@ Token system in `ui/theme/` maps `DESIGN.md` to Compose:
 
 - Unit tests use JUnit 4.13.2.
 - Instrumentation tests use Espresso 3.6.1.
+- **No test source directories exist** (`src/test/`, `src/androidTest/` are missing). The Gradle tasks exist but will produce "no tests" results.
 - No changes to `hermes-agent/` — its test suite (`scripts/run_tests.sh`) is separate.

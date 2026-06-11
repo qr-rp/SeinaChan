@@ -19,6 +19,7 @@ object HermesEventTypes {
     const val REASONING_DELTA = "reasoning.delta"
     const val THINKING_DELTA = "thinking.delta"
     const val REASONING_AVAILABLE = "reasoning.available"
+    const val TOOL_GENERATING = "tool.generating"
     const val TOOL_START = "tool.start"
     const val TOOL_PROGRESS = "tool.progress"
     const val TOOL_COMPLETE = "tool.complete"

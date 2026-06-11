@@ -58,8 +58,6 @@ class HermesWsClient(
         )
         private const val DEFAULT_TIMEOUT = 60_000L
 
-        /** 心跳超时：60 秒未收到帧则断开 */
-        private const val HEARTBEAT_TIMEOUT_MS = 60_000L
         /** 心跳检查间隔 */
         private const val HEARTBEAT_CHECK_INTERVAL_MS = 30_000L
         /** 最大重连延迟：5 分钟 */
@@ -88,6 +86,15 @@ class HermesWsClient(
     /** 上次收到帧的时间戳，用于心跳超时检测 */
     private var lastFrameTime = 0L
     private var heartbeatWatchJob: Job? = null
+
+    private var currentHeartbeatTimeoutMs = 25_000L
+    private val baseHeartbeatTimeoutMs = 25_000L
+    private val longRunningHeartbeatTimeoutMs = 90_000L
+
+    fun setLongRunningMode(enabled: Boolean) {
+        currentHeartbeatTimeoutMs = if (enabled) longRunningHeartbeatTimeoutMs else baseHeartbeatTimeoutMs
+        FileLogger.i("HermesWsClient", "LongRunningMode=$enabled, heartbeatTimeout=${currentHeartbeatTimeoutMs}ms")
+    }
 
     init {
         scope.launch {
@@ -164,8 +171,8 @@ class HermesWsClient(
                 while (true) {
                     delay(HEARTBEAT_CHECK_INTERVAL_MS)
                     val elapsed = System.currentTimeMillis() - lastFrameTime
-                    if (elapsed > HEARTBEAT_TIMEOUT_MS) {
-                        FileLogger.w("HermesWsClient", "心跳超时：${elapsed}ms 未收到帧")
+                    if (elapsed > currentHeartbeatTimeoutMs) {
+                        FileLogger.e("HermesWsClient", "心跳超时：${elapsed}ms 未收到帧（阈值=${currentHeartbeatTimeoutMs}ms），强制关闭会话")
                         try {
                             session?.close()
                         } catch (_: Exception) {}
@@ -180,7 +187,7 @@ class HermesWsClient(
                         lastFrameTime = System.currentTimeMillis()
                         if (frame is Frame.Text) {
                             val text = frame.readText()
-                            FileLogger.d("HermesWsClient", "Frame received: ${text.take(500)}")
+                            FileLogger.d("HermesWsClient", "Frame received, len=${text.length}: ${text.take(200)}")
                             handleFrame(text)
                         }
                     }
@@ -216,6 +223,30 @@ class HermesWsClient(
             reconnectAttempts++
             val url = lastUrl ?: return@launch
             val token = lastToken ?: return@launch
+            doConnect(url, token)
+        }
+    }
+
+    /**
+     * 立即触发重连，跳过指数退避等待。
+     * 供应用回到前台时调用，实现快速恢复连接。
+     */
+    fun reconnectImmediately() {
+        if (_state.value == ConnectionState.Open || _state.value == ConnectionState.Connecting) {
+            FileLogger.i("HermesWsClient", "reconnectImmediately() 跳过，当前状态=$_state.value")
+            return
+        }
+        FileLogger.i("HermesWsClient", "reconnectImmediately() 触发立即重连")
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectAttempts = 0
+        val url = lastUrl
+        val token = lastToken
+        if (url == null || token == null) {
+            FileLogger.w("HermesWsClient", "reconnectImmediately() 失败：缺少 url 或 token")
+            return
+        }
+        scope.launch {
             doConnect(url, token)
         }
     }
@@ -298,7 +329,10 @@ class HermesWsClient(
                 try {
                     val event = json.decodeFromJsonElement(GatewayEventSerializer, transformed)
                     FileLogger.d("HermesWsClient", "Event parsed: ${event::class.simpleName}")
-                    _events.tryEmit(event)
+                    val emitted = _events.tryEmit(event)
+                    if (!emitted) {
+                        FileLogger.w("HermesWsClient", "Event buffer full, dropped event type=${event::class.simpleName}")
+                    }
                 } catch (e: Exception) {
                     val eventType = params["type"]?.jsonPrimitive?.content ?: "unknown"
                     FileLogger.e("HermesWsClient", "Failed to deserialize event type=$eventType", e)

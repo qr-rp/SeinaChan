@@ -38,12 +38,11 @@ fun GlobalEventHandler(
     LaunchedEffect(connectionState) {
         when {
             previousState is ConnectionState.Connecting && connectionState is ConnectionState.Open -> {
-                if (hasBeenDisconnected) {
-                    snackbarHostState.showSnackbar("已恢复连接")
-                    hasBeenDisconnected = false
-                } else {
+                // 仅首次连接时提示，从后台恢复的重连静默处理
+                if (!hasBeenDisconnected) {
                     snackbarHostState.showSnackbar("已连接")
                 }
+                hasBeenDisconnected = false
             }
             previousState is ConnectionState.Open && (connectionState is ConnectionState.Error || connectionState is ConnectionState.Closed) -> {
                 snackbarHostState.showSnackbar("连接断开")

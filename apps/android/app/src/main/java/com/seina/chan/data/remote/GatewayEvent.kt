@@ -17,7 +17,8 @@ sealed class GatewayEvent {
     @Serializable
     @SerialName(HermesEventTypes.SESSION_INFO)
     data class SessionInfo(
-        val id: String,
+        @SerialName("session_id") val sessionId: String? = null,
+        val id: String? = null,
         val title: String? = null
     ) : GatewayEvent()
 
@@ -40,7 +41,8 @@ sealed class GatewayEvent {
     @SerialName(HermesEventTypes.MESSAGE_COMPLETE)
     data class MessageComplete(
         val id: String = "",
-        val reasoning: String = ""
+        val reasoning: String = "",
+        val text: String = ""
     ) : GatewayEvent()
 
     @Serializable
@@ -60,6 +62,10 @@ sealed class GatewayEvent {
     data class ReasoningAvailable(
         val text: String
     ) : GatewayEvent()
+
+    @Serializable
+    @SerialName(HermesEventTypes.TOOL_GENERATING)
+    data class ToolGenerating(val name: String) : GatewayEvent()
 
     @Serializable
     @SerialName(HermesEventTypes.TOOL_START)
@@ -138,6 +144,7 @@ object GatewayEventSerializer : JsonContentPolymorphicSerializer<GatewayEvent>(G
             HermesEventTypes.REASONING_DELTA -> GatewayEvent.ReasoningDelta.serializer()
             HermesEventTypes.THINKING_DELTA -> GatewayEvent.ThinkingDelta.serializer()
             HermesEventTypes.REASONING_AVAILABLE -> GatewayEvent.ReasoningAvailable.serializer()
+            HermesEventTypes.TOOL_GENERATING -> GatewayEvent.ToolGenerating.serializer()
             HermesEventTypes.TOOL_START -> GatewayEvent.ToolStart.serializer()
             HermesEventTypes.TOOL_PROGRESS -> GatewayEvent.ToolProgress.serializer()
             HermesEventTypes.TOOL_COMPLETE -> GatewayEvent.ToolComplete.serializer()

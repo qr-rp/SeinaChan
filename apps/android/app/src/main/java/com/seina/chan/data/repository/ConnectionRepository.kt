@@ -123,10 +123,25 @@ class ConnectionRepository(
             .removePrefix("https://")
             .removeSuffix("/api/ws")
             .removeSuffix("/")
-        val parts = cleaned.split(":")
-        return if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
-            parts[0] to parts[1]
-        } else null
+
+        // 支持 IPv6 格式，如 [2001:db8::1]:8080
+        return if (cleaned.startsWith("[")) {
+            val bracketEnd = cleaned.indexOf("]")
+            if (bracketEnd == -1) return null
+            val host = cleaned.substring(1, bracketEnd)
+            val afterBracket = cleaned.substring(bracketEnd + 1)
+            val parsedPort = if (afterBracket.startsWith(":")) {
+                afterBracket.removePrefix(":")
+            } else {
+                "80"
+            }
+            if (host.isNotBlank() && parsedPort.isNotBlank()) host to parsedPort else null
+        } else {
+            val parts = cleaned.split(":")
+            if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
+                parts[0] to parts[1]
+            } else null
+        }
     }
 
     suspend fun saveLastDbSessionId(sessionId: String) {
@@ -161,7 +176,11 @@ class ConnectionRepository(
                 Triple("ws", "http", trimmedIp.removePrefix("http://"))
             else -> Triple("ws", "http", trimmedIp)
         }
-        val host = cleanHost.removeSuffix("/")
+        var host = cleanHost.removeSuffix("/")
+        // 自动为裸 IPv6 地址添加方括号（域名不含冒号，不受影响）
+        if (host.contains(":") && !host.startsWith("[")) {
+            host = "[$host]"
+        }
         return ConnectionUrls(
             wsUrl = "$wsScheme://$host:$port/api/ws",
             httpBaseUrl = "$httpScheme://$host:$port"

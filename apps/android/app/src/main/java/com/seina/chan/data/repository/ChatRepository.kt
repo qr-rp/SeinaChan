@@ -53,6 +53,21 @@ class ChatRepository(
         wsClient.events.onEach { event ->
             handleEvent(event)
         }.launchIn(scope)
+
+        wsClient.state.onEach { state ->
+            if (state is com.seina.chan.data.remote.ConnectionState.Open && currentSessionId != null) {
+                FileLogger.i("ChatRepository", "WebSocket reconnected, auto-resuming session=$currentSessionId")
+                try {
+                    val params = kotlinx.serialization.json.buildJsonObject {
+                        put("session_id", currentSessionId!!)
+                    }
+                    wsClient.request(HermesMethods.SESSION_RESUME, params)
+                    FileLogger.i("ChatRepository", "Auto-resume succeeded for session=$currentSessionId")
+                } catch (e: Exception) {
+                    FileLogger.e("ChatRepository", "Auto-resume failed for session=$currentSessionId", e)
+                }
+            }
+        }.launchIn(scope)
     }
 
     suspend fun sendMessage(text: String, sessionId: String) {
@@ -218,6 +233,14 @@ class ChatRepository(
         return cached
     }
 
+    private fun truncateResult(text: String, maxLength: Int = 3000): String {
+        return if (text.length > maxLength) {
+            text.take(maxLength) + "... [truncated, total=${text.length}]"
+        } else {
+            text
+        }
+    }
+
     private fun handleEvent(event: GatewayEvent) {
         try {
             when (event) {
@@ -244,7 +267,9 @@ class ChatRepository(
                     persistMessage(msg)
                 }
                 is GatewayEvent.MessageDelta -> {
+                    FileLogger.d("ChatRepository", "MessageDelta received, delta='${event.delta.take(50)}', msgCount=${_messages.value.size}")
                     updateLastStreamingAssistantMessage { msg ->
+                        FileLogger.d("ChatRepository", "MessageDelta: updating msg id=${msg.id}, content='${msg.content.take(30)}' -> '${(msg.content + event.delta).take(30)}'")
                         msg.copy(content = msg.content + event.delta)
                     }
                 }
@@ -257,12 +282,14 @@ class ChatRepository(
                             msg.copy(
                                 isStreaming = false,
                                 isReasoning = false,
-                                reasoningText = event.reasoning.ifBlank { msg.reasoningText }
+                                reasoningText = event.reasoning.ifBlank { msg.reasoningText },
+                                content = event.text.ifBlank { msg.content }
                             )
                         )
                         _messages.value = messages
                         persistMessage(messages[index])
                     }
+                    wsClient.setLongRunningMode(false)
                 }
                 is GatewayEvent.ReasoningDelta -> {
                     updateLastStreamingAssistantMessage { it.copy(reasoningText = it.reasoningText + event.text) }
@@ -282,16 +309,22 @@ class ChatRepository(
                         status = ToolCallStatus.Running
                     )
                     appendToolCallToStreamingMessage(toolCall)
+                    wsClient.setLongRunningMode(true)
                 }
                 is GatewayEvent.ToolProgress -> {
                     updateToolCall(event.toolId) { it.copy(result = it.result + event.text) }
                 }
                 is GatewayEvent.ToolComplete -> {
-                    val resultText = when (val r = event.result) {
+                    val rawResultText = when (val r = event.result) {
                         is kotlinx.serialization.json.JsonPrimitive -> r.content
                         is kotlinx.serialization.json.JsonArray -> r.joinToString("\n") { it.toString() }
                         is kotlinx.serialization.json.JsonObject -> r.entries.joinToString("\n") { "${it.key}: ${it.value}" }
                         else -> r?.toString() ?: ""
+                    }
+                    val resultText = truncateResult(rawResultText)
+                    if (rawResultText.length > 3000) {
+                        FileLogger.d("ChatRepository", "ToolComplete result truncated from ${rawResultText.length} to ${resultText.length} for tool=${event.toolId}")
+                        FileLogger.d("ChatRepository", "ToolComplete raw result: ${rawResultText.take(2000)}")
                     }
                     val found = _messages.value.any { msg -> msg.toolCalls.any { it.id == event.toolId } }
                     if (found) {
@@ -316,6 +349,7 @@ class ChatRepository(
                         )
                         appendToolCallToStreamingMessage(toolCall)
                     }
+                    wsClient.setLongRunningMode(false)
                 }
                 is GatewayEvent.ApprovalRequest -> {
                     val toolCall = ToolCallDetail(
@@ -339,6 +373,10 @@ class ChatRepository(
                     } else {
                         FileLogger.w("ChatRepository", "ReviewSummary received but no assistant message found")
                     }
+                }
+                is GatewayEvent.ErrorEvent -> {
+                    FileLogger.e("ChatRepository", "Gateway error: ${event.message}")
+                    wsClient.setLongRunningMode(false)
                 }
                 else -> Unit
             }
