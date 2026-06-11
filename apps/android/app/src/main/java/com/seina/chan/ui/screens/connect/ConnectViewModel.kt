@@ -108,7 +108,7 @@ class ConnectViewModel @Inject constructor(
             FileLogger.i("ConnectViewModel", "connect() ip=$ip, port=$port, tokenPrefix=${token.take(4)}")
 
             if (ip.isBlank()) {
-                _uiState.value = _uiState.value.copy(error = "请输入 WSL IP 地址")
+                _uiState.value = _uiState.value.copy(error = "请输入服务器地址")
                 return@launch
             }
             if (port.isBlank()) {

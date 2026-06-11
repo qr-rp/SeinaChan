@@ -75,7 +75,7 @@ fun ConnectScreen(
             OutlinedTextField(
                 value = uiState.ip,
                 onValueChange = viewModel::onIpChange,
-                label = { Text("WSL IP 地址") },
+                label = { Text("服务器地址") },
                 placeholder = { Text("127.0.0.1") },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isLoading,

@@ -23,8 +23,9 @@ class ConnectionRepository(
     val connectionState: StateFlow<ConnectionState> = wsClient.state
 
     suspend fun connect(config: ConnectionConfig): Result<Unit> {
-        val wsUrl = "ws://${config.ip}:${config.port}/api/ws"
-        val httpBaseUrl = "http://${config.ip}:${config.port}"
+        val urls = parseConnectionUrls(config.ip, config.port)
+        val wsUrl = urls.wsUrl
+        val httpBaseUrl = urls.httpBaseUrl
         FileLogger.i("ConnectionRepository", "connect() httpBaseUrl=$httpBaseUrl, wsUrl=$wsUrl")
         return try {
             apiService.setConfig(httpBaseUrl, config.token)
@@ -44,7 +45,8 @@ class ConnectionRepository(
     }
 
     suspend fun testConnection(ip: String, port: String): Result<String> {
-        val url = "http://$ip:$port/api/status"
+        val urls = parseConnectionUrls(ip, port)
+        val url = "${urls.httpBaseUrl}/api/status"
         FileLogger.i("ConnectionRepository", "testConnection() url=$url")
         return try {
             val response = client.get(url)
@@ -142,6 +144,28 @@ class ConnectionRepository(
         dataStore.edit { prefs ->
             prefs.remove(LAST_DB_SESSION_ID_KEY)
         }
+    }
+
+    private data class ConnectionUrls(val wsUrl: String, val httpBaseUrl: String)
+
+    private fun parseConnectionUrls(ip: String, port: String): ConnectionUrls {
+        val trimmedIp = ip.trim()
+        val (wsScheme, httpScheme, cleanHost) = when {
+            trimmedIp.startsWith("wss://", ignoreCase = true) ->
+                Triple("wss", "https", trimmedIp.removePrefix("wss://"))
+            trimmedIp.startsWith("ws://", ignoreCase = true) ->
+                Triple("ws", "http", trimmedIp.removePrefix("ws://"))
+            trimmedIp.startsWith("https://", ignoreCase = true) ->
+                Triple("wss", "https", trimmedIp.removePrefix("https://"))
+            trimmedIp.startsWith("http://", ignoreCase = true) ->
+                Triple("ws", "http", trimmedIp.removePrefix("http://"))
+            else -> Triple("ws", "http", trimmedIp)
+        }
+        val host = cleanHost.removeSuffix("/")
+        return ConnectionUrls(
+            wsUrl = "$wsScheme://$host:$port/api/ws",
+            httpBaseUrl = "$httpScheme://$host:$port"
+        )
     }
 
     companion object {
