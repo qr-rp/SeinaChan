@@ -103,7 +103,7 @@ object AppModule {
             context,
             AppDatabase::class.java,
             "seina_chan_db"
-        ).addMigrations(AppDatabase.MIGRATION_1_2)
+        ).addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
     }
 
@@ -132,11 +132,12 @@ object AppModule {
     @Provides
     @Singleton
     fun provideChatRepository(
+        @ApplicationContext context: Context,
         wsClient: HermesWsClient,
         sentImageDao: SentImageDao,
         messageDao: MessageDao
     ): ChatRepository {
-        return ChatRepository(wsClient, sentImageDao, messageDao)
+        return ChatRepository(context, wsClient, sentImageDao, messageDao)
     }
 
     @Provides

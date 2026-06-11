@@ -3,16 +3,20 @@ package com.seina.chan.ui.screens.connect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.model.ConnectionConfig
+import com.seina.chan.data.model.ConnectionProfile
 import com.seina.chan.data.remote.ConnectionState
 import com.seina.chan.data.repository.ConnectionRepository
+import com.seina.chan.data.repository.SettingsRepository
 import com.seina.chan.util.FileLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -25,7 +29,8 @@ sealed class TestStatus {
 
 @HiltViewModel
 class ConnectViewModel @Inject constructor(
-    private val connectionRepository: ConnectionRepository
+    private val connectionRepository: ConnectionRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     data class ConnectUiState(
@@ -131,6 +136,55 @@ class ConnectViewModel @Inject constructor(
                 FileLogger.e("ConnectViewModel", "connect() failed: $message")
                 _uiState.value = _uiState.value.copy(isLoading = false, error = message)
             }
+        }
+    }
+
+    val connectionProfiles: StateFlow<List<ConnectionProfile>> =
+        settingsRepository.connectionProfiles.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    fun saveCurrentAsProfile(name: String) {
+        viewModelScope.launch {
+            val current = _uiState.value
+            val profile = ConnectionProfile(
+                name = name,
+                ip = current.ip.trim(),
+                port = current.port.trim(),
+                token = current.token.trim()
+            )
+            settingsRepository.addConnectionProfile(profile)
+            FileLogger.i("ConnectViewModel", "saveCurrentAsProfile() name=$name")
+        }
+    }
+
+    fun deleteProfile(profileId: String) {
+        viewModelScope.launch {
+            settingsRepository.deleteConnectionProfile(profileId)
+            FileLogger.i("ConnectViewModel", "deleteProfile() id=$profileId")
+        }
+    }
+
+    fun loadProfile(profile: ConnectionProfile) {
+        _uiState.value = _uiState.value.copy(
+            ip = profile.ip,
+            port = profile.port.ifBlank { "9119" },
+            token = profile.token,
+            error = null,
+            testStatus = TestStatus.None
+        )
+        FileLogger.i("ConnectViewModel", "loadProfile() name=${profile.name}")
+        connect()
+    }
+
+    fun renameProfile(profileId: String, newName: String) {
+        viewModelScope.launch {
+            val profiles = connectionProfiles.value
+            val target = profiles.find { it.id == profileId } ?: return@launch
+            settingsRepository.updateConnectionProfile(target.copy(name = newName))
+            FileLogger.i("ConnectViewModel", "renameProfile() id=$profileId, newName=$newName")
         }
     }
 

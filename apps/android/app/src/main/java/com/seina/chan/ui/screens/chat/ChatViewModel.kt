@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.seina.chan.data.remote.ConnectionState
 import com.seina.chan.data.remote.HermesWsClient
+import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.data.repository.ChatRepository
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SessionRepository
@@ -106,7 +107,7 @@ class ChatViewModel @Inject constructor(
     ) { inputState, messages ->
         inputState.copy(
             messages = messages,
-            canSend = (inputState.currentInput.isNotBlank() || inputState.selectedImages.isNotEmpty()) && !inputState.isLoading
+            canSend = (inputState.currentInput.isNotBlank() || inputState.selectedImages.isNotEmpty() || inputState.selectedVideo != null || inputState.selectedFiles.isNotEmpty()) && !inputState.isLoading
         )
     }.stateIn(
         scope = viewModelScope,
@@ -116,6 +117,25 @@ class ChatViewModel @Inject constructor(
 
     fun onInputChange(text: String) {
         _inputState.update { it.copy(currentInput = text) }
+    }
+
+    fun quoteMessage(message: ChatMessage) {
+        _inputState.update { it.copy(quotedMessage = message) }
+    }
+
+    fun clearQuote() {
+        _inputState.update { it.copy(quotedMessage = null) }
+    }
+
+    fun resendMessage(content: String) {
+        viewModelScope.launch {
+            try {
+                chatRepository.sendMessage(content, currentWsSessionId)
+            } catch (e: Exception) {
+                FileLogger.e("ChatViewModel", "resendMessage() failed", e)
+                _inputState.update { it.copy(error = e.message) }
+            }
+        }
     }
 
     suspend fun ensureSession(): String {
@@ -164,10 +184,12 @@ class ChatViewModel @Inject constructor(
     fun sendMessage() {
         val text = _inputState.value.currentInput.trim()
         val images = _inputState.value.selectedImages
-        if (text.isEmpty() && images.isEmpty()) return
+        val video = _inputState.value.selectedVideo
+        val files = _inputState.value.selectedFiles
+        if (text.isEmpty() && images.isEmpty() && video == null && files.isEmpty()) return
 
-        FileLogger.i("ChatViewModel", "sendMessage() dbSessionId=$currentDbSessionId, wsSessionId=$currentWsSessionId, textLength=${text.length}, images=${images.size}")
-        _inputState.update { it.copy(isLoading = true, error = null, selectedImages = emptyList()) }
+        FileLogger.i("ChatViewModel", "sendMessage() dbSessionId=$currentDbSessionId, wsSessionId=$currentWsSessionId, textLength=${text.length}, images=${images.size}, video=$video, files=${files.size}")
+        _inputState.update { it.copy(isLoading = true, error = null, selectedImages = emptyList(), selectedVideo = null, selectedFiles = emptyList()) }
         viewModelScope.launch {
             try {
                 if (currentDbSessionId.isEmpty()) {
@@ -181,15 +203,53 @@ class ChatViewModel @Inject constructor(
                         FileLogger.w("ChatViewModel", "sendMessage() resumeSession failed, continuing: ${e.message}")
                     }
                 }
+                if (video != null) {
+                    try {
+                        chatRepository.sendVideo(video, context.contentResolver, currentWsSessionId)
+                        FileLogger.i("ChatViewModel", "sendVideo() succeeded for uri=$video")
+                    } catch (e: Exception) {
+                        FileLogger.e("ChatViewModel", "sendVideo() failed for uri=$video", e)
+                    }
+                }
                 if (images.isNotEmpty()) {
                     sendImagesInternal(images)
                 }
-                if (text.isNotEmpty()) {
-                    chatRepository.sendMessage(text, currentWsSessionId)
-                } else if (images.isNotEmpty()) {
-                    // 纯图片场景：发送空 prompt 触发 assistant 回复
+                if (files.isNotEmpty()) {
+                    val fileContents = StringBuilder()
+                    for (uri in files) {
+                        try {
+                            context.contentResolver.openInputStream(uri)?.use { stream ->
+                                val bytes = stream.readBytes()
+                                val isBinary = bytes.contains(0.toByte())
+                                val name = uri.lastPathSegment ?: "未知文件"
+                                if (isBinary) {
+                                    fileContents.append("[File: $name] (binary file, content not readable)\n\n---\n\n")
+                                } else {
+                                    val charset = java.nio.charset.Charset.defaultCharset()
+                                    val content = String(bytes, charset)
+                                    fileContents.append("[File: $name]\n\n$content\n\n---\n\n")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            val name = uri.lastPathSegment ?: "未知文件"
+                            fileContents.append("[File: $name] (binary file, content not readable)\n\n---\n\n")
+                        }
+                    }
+                    val combinedText = if (text.isNotEmpty()) {
+                        fileContents.toString() + text
+                    } else {
+                        fileContents.toString().trimEnd()
+                    }
+                    if (combinedText.isNotBlank()) {
+                        chatRepository.sendMessage(combinedText, currentWsSessionId, uiState.value.quotedMessage?.id)
+                    }
+                } else if (text.isNotEmpty()) {
+                    chatRepository.sendMessage(text, currentWsSessionId, uiState.value.quotedMessage?.id)
+                } else if (images.isNotEmpty() || video != null) {
+                    // 纯图片/视频场景：发送空 prompt 触发 assistant 回复
                     chatRepository.submitPrompt(currentWsSessionId)
                 }
+                clearQuote()
                 _inputState.update { it.copy(currentInput = "", isLoading = false) }
                 FileLogger.i("ChatViewModel", "sendMessage() succeeded")
             } catch (e: Exception) {
@@ -211,6 +271,22 @@ class ChatViewModel @Inject constructor(
      */
     fun removeSelectedImage(uri: Uri) {
         _inputState.update { it.copy(selectedImages = it.selectedImages.filter { u -> u != uri }) }
+    }
+
+    fun onVideoSelected(uri: Uri) {
+        _inputState.update { it.copy(selectedVideo = uri) }
+    }
+
+    fun removeSelectedVideo() {
+        _inputState.update { it.copy(selectedVideo = null) }
+    }
+
+    fun onFileSelected(uri: Uri) {
+        _inputState.update { it.copy(selectedFiles = it.selectedFiles + uri) }
+    }
+
+    fun removeSelectedFile(uri: Uri) {
+        _inputState.update { it.copy(selectedFiles = it.selectedFiles.filter { u -> u != uri }) }
     }
 
     private suspend fun sendImagesInternal(uris: List<Uri>) {

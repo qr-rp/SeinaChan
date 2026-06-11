@@ -319,7 +319,9 @@ fun ChatScreen(
                                 showToolCalls = uiState.showToolCalls,
                                 showReasoning = uiState.showReasoning,
                                 hiddenToolNames = uiState.hiddenToolNames,
-                                onImageClick = { previewImageUri = it }
+                                onImageClick = { previewImageUri = it },
+                                onQuote = { viewModel.quoteMessage(it) },
+                                onResend = { viewModel.resendMessage(it) }
                             )
                         }
                     }
@@ -347,6 +349,39 @@ fun ChatScreen(
                 }
             }
 
+            // Quote preview
+            val quoted = uiState.quotedMessage
+            if (quoted != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.md, vertical = Spacing.xs)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium)
+                        .padding(Spacing.md),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "引用 ${quoted.role}",
+                            style = TextStyles.caption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = quoted.content.take(60),
+                            style = TextStyles.bodySm,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                    Text(
+                        text = "×",
+                        style = TextStyles.bodyMd,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.clickable { viewModel.clearQuote() }
+                    )
+                }
+            }
+
             // Composer
             Composer(
                 value = uiState.currentInput,
@@ -356,7 +391,13 @@ fun ChatScreen(
                 selectedImages = uiState.selectedImages,
                 onImagesSelected = viewModel::onImagesSelected,
                 onRemoveImage = viewModel::removeSelectedImage,
-                onImageClick = { previewImageUri = it.toString() }
+                onImageClick = { previewImageUri = it.toString() },
+                selectedVideo = uiState.selectedVideo,
+                onVideoSelected = viewModel::onVideoSelected,
+                onRemoveVideo = viewModel::removeSelectedVideo,
+                selectedFiles = uiState.selectedFiles,
+                onFileSelected = viewModel::onFileSelected,
+                onRemoveFile = viewModel::removeSelectedFile
             )
         }
     }

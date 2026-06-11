@@ -12,7 +12,8 @@ data class ChatMessage(
     val isReasoning: Boolean = false,
     val toolCalls: List<ToolCallDetail> = emptyList(),
     val imageUrl: String? = null,
-    val systemEvents: List<String> = emptyList()
+    val systemEvents: List<String> = emptyList(),
+    val parentId: String? = null
 )
 
 @Serializable

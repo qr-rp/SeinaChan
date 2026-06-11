@@ -160,6 +160,120 @@ private fun parseInlineSpans(text: String): List<InlineSpan> {
 
 // === 渲染组件 ===
 
+private object CodeHighlighter {
+    private val keywords = setOf(
+        "fun", "val", "var", "class", "object", "if", "else", "for", "while",
+        "return", "import", "package", "data", "suspend", "when", "in", "is",
+        "as", "true", "false", "null", "this", "super", "try", "catch",
+        "finally", "throw", "interface", "enum", "sealed", "abstract", "open",
+        "private", "public", "protected", "internal", "override", "lateinit",
+        "companion", "const", "inline", "crossinline", "noinline", "reified",
+        "out", "infix", "operator", "tailrec", "vararg", "typealias", "expect",
+        "actual", "by", "where", "init", "get", "set", "field", "property",
+        "file", "constructor", "delegate", "dynamic", "external", "annotation",
+        "value", "context", "repeatable", "replaceWith", "Suppress", "OptIn",
+        "Deprecated", "SuppressWarnings", "JvmName", "JvmStatic", "JvmOverloads",
+        "JvmField", "Volatile", "Synchronized", "Transient", "Strictfp", "Native"
+    )
+
+    private val keywordPattern = Regex("""\b(${keywords.joinToString("|")})\b""")
+    private val numberPattern = Regex("""\d+(\.\d+)?""")
+
+    fun highlight(code: String, language: String): AnnotatedString {
+        return buildAnnotatedString {
+            var pos = 0
+            while (pos < code.length) {
+                val remaining = code.substring(pos)
+                var matched = false
+
+                // Strings first (they can contain // or /* */)
+                if (!matched && (code[pos] == '"' || code[pos] == '\'' || code[pos] == '`')) {
+                    val quote = code[pos]
+                    var i = pos + 1
+                    while (i < code.length) {
+                        if (code[i] == '\\' && i + 1 < code.length) {
+                            i += 2
+                        } else if (code[i] == quote) {
+                            i++
+                            break
+                        } else {
+                            i++
+                        }
+                    }
+                    withStyle(SpanStyle(color = Color(0xFF4CAF50))) {
+                        append(code.substring(pos, i))
+                    }
+                    pos = i
+                    matched = true
+                }
+
+                // Block comment /* */
+                if (!matched && remaining.startsWith("/*")) {
+                    val end = code.indexOf("*/", pos + 2)
+                    if (end != -1) {
+                        withStyle(SpanStyle(color = Color.Gray)) {
+                            append(code.substring(pos, end + 2))
+                        }
+                        pos = end + 2
+                    } else {
+                        withStyle(SpanStyle(color = Color.Gray)) {
+                            append(code.substring(pos))
+                        }
+                        pos = code.length
+                    }
+                    matched = true
+                }
+
+                // Line comment //
+                if (!matched && remaining.startsWith("//")) {
+                    val end = code.indexOf('\n', pos)
+                    if (end != -1) {
+                        withStyle(SpanStyle(color = Color.Gray)) {
+                            append(code.substring(pos, end))
+                        }
+                        pos = end
+                    } else {
+                        withStyle(SpanStyle(color = Color.Gray)) {
+                            append(code.substring(pos))
+                        }
+                        pos = code.length
+                    }
+                    matched = true
+                }
+
+                // Numbers
+                if (!matched) {
+                    val numMatch = numberPattern.find(remaining)
+                    if (numMatch != null && numMatch.range.first == 0) {
+                        withStyle(SpanStyle(color = Color(0xFF2196F3))) {
+                            append(numMatch.value)
+                        }
+                        pos += numMatch.value.length
+                        matched = true
+                    }
+                }
+
+                // Keywords
+                if (!matched) {
+                    val kwMatch = keywordPattern.find(remaining)
+                    if (kwMatch != null && kwMatch.range.first == 0) {
+                        withStyle(SpanStyle(color = Color(0xFFCC785C))) {
+                            append(kwMatch.value)
+                        }
+                        pos += kwMatch.value.length
+                        matched = true
+                    }
+                }
+
+                if (!matched) {
+                    append(code[pos])
+                    pos++
+                }
+            }
+        }
+    }
+}
+
 /**
  * 轻量级 Markdown 渲染组件，支持：
  * - 代码块（``` ... ```）：深色背景 + 等宽字体
@@ -219,10 +333,13 @@ private fun CodeBlockView(codeBlock: MarkdownSegment.CodeBlock) {
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
             }
+            val highlighted = remember(codeBlock.code, codeBlock.language) {
+                CodeHighlighter.highlight(codeBlock.code, codeBlock.language)
+            }
             Text(
-                text = codeBlock.code,
+                text = highlighted,
                 style = TextStyles.code,
-                color = CodeText
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }

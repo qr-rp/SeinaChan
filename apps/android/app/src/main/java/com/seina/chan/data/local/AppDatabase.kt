@@ -9,7 +9,7 @@ import com.seina.chan.data.local.dao.SentImageDao
 import com.seina.chan.data.local.entity.MessageEntity
 import com.seina.chan.data.local.entity.SentImageEntity
 
-@Database(entities = [SentImageEntity::class, MessageEntity::class], version = 2, exportSchema = false)
+@Database(entities = [SentImageEntity::class, MessageEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun sentImageDao(): SentImageDao
     abstract fun messageDao(): MessageDao
@@ -33,6 +33,12 @@ abstract class AppDatabase : RoomDatabase() {
                         updatedAt INTEGER NOT NULL
                     )
                 """)
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN parentId TEXT DEFAULT NULL")
             }
         }
     }

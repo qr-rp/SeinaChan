@@ -17,5 +17,6 @@ data class MessageEntity(
     val systemEventsJson: String = "[]",
     val isStreaming: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val parentId: String? = null
 )

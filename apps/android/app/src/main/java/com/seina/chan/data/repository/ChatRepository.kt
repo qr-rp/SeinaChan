@@ -1,6 +1,7 @@
 package com.seina.chan.data.repository
 
 import android.content.ContentResolver
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -32,8 +33,10 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 class ChatRepository(
+    private val context: Context,
     private val wsClient: HermesWsClient,
     private val sentImageDao: SentImageDao,
     private val messageDao: MessageDao
@@ -70,7 +73,7 @@ class ChatRepository(
         }.launchIn(scope)
     }
 
-    suspend fun sendMessage(text: String, sessionId: String) {
+    suspend fun sendMessage(text: String, sessionId: String, parentId: String? = null) {
         currentSessionId = sessionId
         // 结束所有未完成的 assistant 消息，避免积累空消息
         _messages.value = _messages.value.map {
@@ -86,7 +89,8 @@ class ChatRepository(
             id = java.util.UUID.randomUUID().toString(),
             role = "user",
             content = text,
-            isStreaming = false
+            isStreaming = false,
+            parentId = parentId
         )
         _messages.value += userMessage
         persistMessage(userMessage)
@@ -94,6 +98,9 @@ class ChatRepository(
         val params = buildJsonObject {
             put("session_id", sessionId)
             put("text", text)
+            if (parentId != null) {
+                put("parent_id", parentId)
+            }
         }
         wsClient.request(HermesMethods.PROMPT_SUBMIT, params)
     }
@@ -116,6 +123,11 @@ class ChatRepository(
         }
         persistMessages()
 
+        // 先将图片复制到应用私有目录，保证持久化可用
+        val persistentPath = withContext(Dispatchers.IO) {
+            copyImageToPrivateDir(imageUri, contentResolver)
+        }
+
         // 读取图片并转为 base64（大图片自动压缩，非 JPEG 小图片转为 JPEG）
         val (base64Data, mimeType) = withContext(Dispatchers.IO) {
             contentResolver.openInputStream(imageUri)?.use { inputStream ->
@@ -136,13 +148,13 @@ class ChatRepository(
             } ?: throw IllegalArgumentException("无法读取图片")
         }
 
-        // 在本地消息列表添加用户图片消息占位
+        // 在本地消息列表添加用户图片消息占位（使用持久路径）
         val userMessage = ChatMessage(
             id = java.util.UUID.randomUUID().toString(),
             role = "user",
             content = "",
             isStreaming = false,
-            imageUrl = imageUri.toString()
+            imageUrl = persistentPath
         )
         _messages.value += userMessage
         persistMessage(userMessage)
@@ -158,14 +170,99 @@ class ChatRepository(
         if (result is JsonObject) {
             val serverPath = result["path"]?.jsonPrimitive?.content
             if (serverPath != null) {
+                // 标准化路径：只保留 .hermes/images/ 及之后部分，确保与 fetchMessages 时提取的路径一致
+                val normalizedPath = serverPath.substring(serverPath.lastIndexOf(".hermes/images/"))
                 sentImageDao.insert(
                     SentImageEntity(
-                        serverPath = serverPath,
-                        localUri = imageUri.toString()
+                        serverPath = normalizedPath,
+                        localUri = persistentPath
                     )
                 )
             }
         }
+    }
+
+    /**
+     * 将图片从临时 URI 复制到应用私有目录，返回持久化的绝对路径
+     */
+    private fun copyImageToPrivateDir(sourceUri: Uri, contentResolver: ContentResolver): String {
+        val fileName = "sent_img_${System.currentTimeMillis()}.jpg"
+        val destDir = File(context.filesDir, "sent_images").apply { mkdirs() }
+        val destFile = File(destDir, fileName)
+        contentResolver.openInputStream(sourceUri)?.use { input ->
+            destFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        return destFile.absolutePath
+    }
+
+    /**
+     * 发送视频消息
+     * @param videoUri 视频 URI
+     * @param contentResolver 用于读取视频内容
+     * @param sessionId 会话 ID
+     */
+    suspend fun sendVideo(videoUri: Uri, contentResolver: ContentResolver, sessionId: String) {
+        currentSessionId = sessionId
+        _messages.value = _messages.value.map {
+            if (it.isStreaming && it.role == "assistant") {
+                finalizeToolCallsInMessage(
+                    it.copy(isStreaming = false, isReasoning = false)
+                )
+            } else it
+        }
+        persistMessages()
+
+        val fileSize = withContext(Dispatchers.IO) {
+            var size = 0L
+            contentResolver.query(videoUri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idx = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (idx != -1) size = cursor.getLong(idx)
+                }
+            }
+            size
+        }
+
+        if (fileSize > 10 * 1024 * 1024) {
+            FileLogger.w("ChatRepository", "Video too large (${fileSize} bytes), skipping upload")
+            val userMessage = ChatMessage(
+                id = java.util.UUID.randomUUID().toString(),
+                role = "user",
+                content = "[视频]",
+                isStreaming = false
+            )
+            _messages.value += userMessage
+            persistMessage(userMessage)
+            return
+        }
+
+        val (base64Data, mimeType) = withContext(Dispatchers.IO) {
+            contentResolver.openInputStream(videoUri)?.use { inputStream ->
+                val bytes = inputStream.readBytes()
+                val detectedMime = contentResolver.getType(videoUri) ?: "video/mp4"
+                Pair(Base64.encodeToString(bytes, Base64.NO_WRAP), detectedMime)
+            } ?: throw IllegalArgumentException("无法读取视频")
+        }
+
+        val userMessage = ChatMessage(
+            id = java.util.UUID.randomUUID().toString(),
+            role = "user",
+            content = "",
+            isStreaming = false,
+            imageUrl = videoUri.toString()
+        )
+        _messages.value += userMessage
+        persistMessage(userMessage)
+
+        val dataUri = "data:$mimeType;base64,$base64Data"
+        val params = buildJsonObject {
+            put("session_id", sessionId)
+            put("data", dataUri)
+            put("name", "video.mp4")
+        }
+        wsClient.request(HermesMethods.IMAGE_ATTACH_BYTES, params)
     }
 
     /**
@@ -488,7 +585,8 @@ class ChatRepository(
             } catch (_: NumberFormatException) {
                 System.currentTimeMillis()
             },
-            updatedAt = System.currentTimeMillis()
+            updatedAt = System.currentTimeMillis(),
+            parentId = parentId
         )
     }
 
@@ -523,7 +621,8 @@ class ChatRepository(
             isReasoning = isReasoning,
             toolCalls = toolCalls,
             imageUrl = imageUrl,
-            systemEvents = systemEvents
+            systemEvents = systemEvents,
+            parentId = parentId
         )
     }
 

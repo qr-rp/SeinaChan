@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,7 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -47,7 +53,9 @@ fun MessageBubble(
     showToolCalls: Boolean = true,
     showReasoning: Boolean = true,
     hiddenToolNames: Set<String> = emptySet(),
-    onImageClick: ((String) -> Unit)? = null
+    onImageClick: ((String) -> Unit)? = null,
+    onQuote: ((ChatMessage) -> Unit)? = null,
+    onResend: ((String) -> Unit)? = null
 ) {
     val isUser = message.role == "user"
     val effectiveShowToolCalls = showToolCalls && !isUser
@@ -83,6 +91,8 @@ fun MessageBubble(
             }
 
             // 消息气泡
+            var showMenu by remember { mutableStateOf(false) }
+            val clipboardManager = LocalClipboardManager.current
             Box(
                 modifier = Modifier
                     .background(
@@ -90,6 +100,9 @@ fun MessageBubble(
                         shape = AppShapes.lg
                     )
                     .padding(12.dp)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onLongPress = { showMenu = true })
+                    }
             ) {
                 if (message.isStreaming && message.content.isEmpty() && message.imageUrl == null) {
                     TypingIndicator()
@@ -129,12 +142,45 @@ fun MessageBubble(
                             }
                         }
                     }
-                    if (!isUser) {
-                        SelectionContainer {
-                            contentColumn()
-                        }
-                    } else {
+                    SelectionContainer {
                         contentColumn()
+                    }
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("复制文字") },
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(message.content))
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("复制 Markdown") },
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(message.content))
+                            showMenu = false
+                        }
+                    )
+                    if (onQuote != null) {
+                        DropdownMenuItem(
+                            text = { Text("引用回复") },
+                            onClick = {
+                                onQuote(message)
+                                showMenu = false
+                            }
+                        )
+                    }
+                    if (isUser && onResend != null) {
+                        DropdownMenuItem(
+                            text = { Text("重新发送") },
+                            onClick = {
+                                onResend(message.content)
+                                showMenu = false
+                            }
+                        )
                     }
                 }
             }

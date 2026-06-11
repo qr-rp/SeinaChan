@@ -7,8 +7,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.seina.chan.data.model.ConnectionProfile
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
 
 class SettingsRepository(
     private val dataStore: DataStore<Preferences>
@@ -27,6 +30,29 @@ class SettingsRepository(
     val hiddenToolNames: Flow<Set<String>> = dataStore.data.map { it[HIDDEN_TOOL_NAMES_KEY] ?: emptySet() }
     /** 自定义工具链，格式为 "category|tool_name" 的 Set */
     val customTools: Flow<Set<String>> = dataStore.data.map { it[CUSTOM_TOOLS_KEY] ?: emptySet() }
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    val connectionProfiles: Flow<List<ConnectionProfile>> = dataStore.data.map { prefs ->
+        val jsonStr = prefs[CONNECTION_PROFILES_KEY] ?: "[]"
+        try {
+            json.decodeFromString(serializer<List<ConnectionProfile>>(), jsonStr)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun decodeProfiles(prefs: Preferences): List<ConnectionProfile> {
+        return try {
+            json.decodeFromString(serializer<List<ConnectionProfile>>(), prefs[CONNECTION_PROFILES_KEY] ?: "[]")
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun encodeProfiles(profiles: List<ConnectionProfile>): String {
+        return json.encodeToString(serializer<List<ConnectionProfile>>(), profiles)
+    }
 
     suspend fun setPageSize(value: Int) {
         dataStore.edit { prefs ->
@@ -100,6 +126,32 @@ class SettingsRepository(
         }
     }
 
+    suspend fun saveConnectionProfiles(profiles: List<ConnectionProfile>) {
+        dataStore.edit { prefs ->
+            prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(profiles)
+        }
+    }
+
+    suspend fun addConnectionProfile(profile: ConnectionProfile) {
+        dataStore.edit { prefs ->
+            prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(decodeProfiles(prefs) + profile)
+        }
+    }
+
+    suspend fun updateConnectionProfile(profile: ConnectionProfile) {
+        dataStore.edit { prefs ->
+            prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(
+                decodeProfiles(prefs).map { if (it.id == profile.id) profile else it }
+            )
+        }
+    }
+
+    suspend fun deleteConnectionProfile(profileId: String) {
+        dataStore.edit { prefs ->
+            prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(decodeProfiles(prefs).filter { it.id != profileId })
+        }
+    }
+
     companion object {
         private val PAGE_SIZE_KEY = intPreferencesKey("page_size")
         private val SHOW_TOOL_CALLS_KEY = booleanPreferencesKey("show_tool_calls")
@@ -113,5 +165,6 @@ class SettingsRepository(
         private val CONNECTION_TOKEN_KEY = stringPreferencesKey("token")
         private val HIDDEN_TOOL_NAMES_KEY = stringSetPreferencesKey("hidden_tool_names")
         private val CUSTOM_TOOLS_KEY = stringSetPreferencesKey("custom_tools")
+        private val CONNECTION_PROFILES_KEY = stringPreferencesKey("connection_profiles")
     }
 }

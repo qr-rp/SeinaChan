@@ -168,14 +168,21 @@ class SessionRepository(
      * 服务端实际存储格式如：
      *   [You can examine it with vision_analyze using image_url: /path]
      *   [You can examine it with vision_analyze using image_urls: ["/path"]]
+     *   [User sent an image at: /path]
+     *   任何包含 .hermes/images/ 路径的文本
      * 有缓存则返回空内容 + imageUrl；无缓存则替换为 📷 图片 占位符。
      */
     private suspend fun parseImageContent(content: String): Pair<String, String?> {
-        val regex = Regex("""image_url[s]?:\s*\[?"?(/[^\]\s"]*\.hermes/images/[^\]\s"]+)""")
+        val regex = Regex("""\[[^\]]*\.hermes/images/[^\]\s"]+[^\]]*\]|(?:image_url[s]?:\s*\[?"?|sent an image at:\s*)(/[^\]\s"]*\.hermes/images/[^\]\s"]+)""")
         val match = regex.find(content)
         if (match != null) {
-            val serverPath = match.groupValues[1].trim()
-            val localUri = sentImageDao.getUriByServerPath(serverPath)
+            val serverPath = match.groupValues[1].ifBlank {
+                Regex("""(/[^\]\s"]*\.hermes/images/[^\]\s"]+)""").find(match.value)?.groupValues?.get(1) ?: ""
+            }.trim()
+            if (serverPath.isEmpty()) return Pair(content, null)
+            // 标准化路径：只保留 .hermes/images/ 及之后部分，确保与 sendImage 存入的路径一致
+            val normalizedPath = serverPath.substring(serverPath.lastIndexOf(".hermes/images/"))
+            val localUri = sentImageDao.getUriByServerPath(normalizedPath)
             return if (localUri != null) {
                 Pair(content.replace(regex, "").trim(), localUri)
             } else {

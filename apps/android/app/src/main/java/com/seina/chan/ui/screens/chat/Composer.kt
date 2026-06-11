@@ -24,7 +24,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +39,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,7 +64,13 @@ fun Composer(
     selectedImages: List<Uri> = emptyList(),
     onImagesSelected: (List<Uri>) -> Unit = {},
     onRemoveImage: (Uri) -> Unit = {},
-    onImageClick: ((Uri) -> Unit)? = null
+    onImageClick: ((Uri) -> Unit)? = null,
+    selectedVideo: Uri? = null,
+    onVideoSelected: (Uri) -> Unit = {},
+    onRemoveVideo: () -> Unit = {},
+    selectedFiles: List<Uri> = emptyList(),
+    onFileSelected: (Uri) -> Unit = {},
+    onRemoveFile: (Uri) -> Unit = {}
 ) {
     // 多图选择器启动器
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -64,6 +79,20 @@ fun Composer(
         if (uris.isNotEmpty()) {
             onImagesSelected(uris)
         }
+    }
+
+    // 视频选择器启动器
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { onVideoSelected(it) }
+    }
+
+    // 文件选择器启动器
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { onFileSelected(it) }
     }
 
     Column(
@@ -118,6 +147,92 @@ fun Composer(
             }
         }
 
+        // 选中的视频预览
+        if (selectedVideo != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = selectedVideo.toString().takeLast(30),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = onRemoveVideo,
+                    modifier = Modifier.size(20.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "移除视频",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                            .padding(2.dp)
+                    )
+                }
+            }
+        }
+
+        // 选中的文件预览
+        if (selectedFiles.isNotEmpty()) {
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(selectedFiles, key = { it.toString() }) { uri ->
+                    Row(
+                        modifier = Modifier
+                            .padding(end = Spacing.sm)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                            .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = uri.lastPathSegment ?: "文件",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = { onRemoveFile(uri) },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "移除文件",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                    .padding(2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -129,16 +244,64 @@ fun Composer(
                 ),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 附件按钮
-            IconButton(
-                onClick = { imagePickerLauncher.launch("image/*") },
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "添加图片",
-                    tint = MaterialTheme.colorScheme.onBackground
-                )
+            // 附件菜单
+            var menuExpanded by remember { mutableStateOf(false) }
+            Box {
+                IconButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = "添加附件",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("图片") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Image,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            imagePickerLauncher.launch("image/*")
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("视频") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            videoPickerLauncher.launch("video/*")
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("文件") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            filePickerLauncher.launch(arrayOf("*/*"))
+                        }
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(4.dp))
 
