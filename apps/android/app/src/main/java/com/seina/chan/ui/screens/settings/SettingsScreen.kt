@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -298,6 +299,86 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
                         }
+                    }
+                }
+            }
+
+            // 模型设置
+            item {
+                SettingsSectionCard(
+                    title = "模型设置",
+                    icon = Icons.Filled.Tune
+                ) {
+                    if (uiState.availableModels.isNotEmpty()) {
+                        val displayMap = uiState.availableModels.associate { it.modelId to it.display }
+                        val currentDisplay = displayMap[uiState.selectedModel]
+                            ?: uiState.selectedModel.ifBlank { "默认" }
+                        DropdownSettingItem(
+                            title = "当前模型",
+                            description = "选择服务端使用的推理模型",
+                            value = currentDisplay,
+                            options = uiState.availableModels.map { it.display },
+                            optionValues = uiState.availableModels.map { it.modelId },
+                            icon = Icons.Filled.Tune,
+                            onOptionSelected = { viewModel.setSelectedModel(it) }
+                        )
+                    } else {
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    text = "当前模型",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    text = uiState.selectedModel.ifBlank { "默认" },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onBackground
+                                )
+                            },
+                            leadingContent = {
+                                Icon(
+                                    imageVector = Icons.Filled.Tune,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.md),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { viewModel.fetchModelOptions() },
+                            enabled = !uiState.isLoadingModels
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = Spacing.xxs)
+                            )
+                            Text(
+                                text = if (uiState.isLoadingModels) "加载中..." else "刷新模型列表",
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    val modelError = uiState.modelError
+                    if (modelError != null) {
+                        Text(
+                            text = modelError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs)
+                        )
                     }
                 }
             }

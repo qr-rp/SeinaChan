@@ -358,10 +358,11 @@ fun ChatScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .padding(horizontal = Spacing.md)
                 ) {
                     LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = Spacing.md, end = 28.dp),
                         state = listState,
                         contentPadding = PaddingValues(bottom = 8.dp)
                     ) {
@@ -382,6 +383,7 @@ fun ChatScreen(
                         state = listState,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
+                            .padding(end = Spacing.xs)
                             .zIndex(1f)
                     )
                 }

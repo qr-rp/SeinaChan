@@ -50,6 +50,7 @@ import com.seina.chan.ui.components.SeinaTextField
 import androidx.compose.material3.MaterialTheme
 import com.seina.chan.ui.theme.Spacing
 import com.seina.chan.ui.theme.TextStyles
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -127,7 +128,8 @@ fun SessionListScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(bottom = Spacing.md, horizontal = Spacing.sm)
+            .padding(horizontal = Spacing.sm)
+            .padding(bottom = Spacing.md)
     ) {
         Row(
             modifier = Modifier

@@ -2,14 +2,23 @@ package com.seina.chan.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.seina.chan.data.remote.HermesApiService
+import com.seina.chan.data.remote.ModelAssignment
 import com.seina.chan.data.repository.ConnectionRepository
 import com.seina.chan.data.repository.SettingsRepository
+import com.seina.chan.util.FileLogger
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class ModelOption(
+    val provider: String,
+    val display: String,
+    val modelId: String
+)
 
 data class SettingsUiState(
     val pageSize: Int = 20,
@@ -24,13 +33,20 @@ data class SettingsUiState(
     val connectionToken: String = "",
     val hiddenToolNames: Set<String> = emptySet(),
     /** 自定义工具链，格式为 "category|tool_name" */
-    val customTools: Set<String> = emptySet()
+    val customTools: Set<String> = emptySet(),
+    /** 用户选择的模型，格式为 "provider/model" 或纯 modelId */
+    val selectedModel: String = "",
+    /** 从服务端获取的可用模型列表 */
+    val availableModels: List<ModelOption> = emptyList(),
+    val isLoadingModels: Boolean = false,
+    val modelError: String? = null
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val connectionRepository: ConnectionRepository
+    private val connectionRepository: ConnectionRepository,
+    private val apiService: HermesApiService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -96,6 +112,60 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.customTools.collect { value ->
                 _uiState.update { it.copy(customTools = value) }
             }
+        }
+        viewModelScope.launch {
+            settingsRepository.selectedModel.collect { value ->
+                _uiState.update { it.copy(selectedModel = value) }
+            }
+        }
+    }
+
+    fun fetchModelOptions() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingModels = true, modelError = null) }
+            try {
+                val response = apiService.getModelOptions()
+                val models = mutableListOf<ModelOption>()
+                response.providers.filter { it.authenticated && it.models.isNotEmpty() }.forEach { provider ->
+                    provider.models.forEach { modelId ->
+                        val display = "${provider.name ?: provider.slug} / $modelId"
+                        models.add(ModelOption(provider.slug, display, modelId))
+                    }
+                }
+                _uiState.update {
+                    it.copy(
+                        availableModels = models,
+                        isLoadingModels = false,
+                        modelError = null
+                    )
+                }
+                FileLogger.i("SettingsViewModel", "获取模型列表成功: ${models.size} 个模型")
+            } catch (e: Exception) {
+                FileLogger.e("SettingsViewModel", "获取模型列表失败", e)
+                _uiState.update {
+                    it.copy(
+                        isLoadingModels = false,
+                        modelError = "获取模型列表失败: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    fun setSelectedModel(modelId: String) {
+        viewModelScope.launch {
+            val option = _uiState.value.availableModels.find { it.modelId == modelId }
+            val provider = option?.provider ?: ""
+            try {
+                if (provider.isNotBlank() && modelId.isNotBlank()) {
+                    apiService.setModel(ModelAssignment(provider = provider, model = modelId))
+                    FileLogger.i("SettingsViewModel", "设置模型成功: provider=$provider, model=$modelId")
+                }
+            } catch (e: Exception) {
+                FileLogger.e("SettingsViewModel", "设置模型失败", e)
+                _uiState.update { it.copy(modelError = "设置模型失败: ${e.message}") }
+            }
+            settingsRepository.setSelectedModel(modelId)
         }
     }
 

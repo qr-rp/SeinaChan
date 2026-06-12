@@ -7,6 +7,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.patch
+import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -68,6 +69,28 @@ data class ModelInfo(
     val id: String,
     val name: String? = null,
     val provider: String? = null
+)
+
+@Serializable
+data class ProviderRow(
+    val slug: String,
+    val name: String? = null,
+    val models: List<String> = emptyList(),
+    val authenticated: Boolean = false
+)
+
+@Serializable
+data class ModelOptionsResponse(
+    val providers: List<ProviderRow> = emptyList(),
+    val model: String = "",
+    val provider: String = ""
+)
+
+@Serializable
+data class ModelAssignment(
+    val scope: String = "main",
+    val provider: String,
+    val model: String
 )
 
 @Serializable
@@ -135,6 +158,23 @@ class HermesApiService(
     suspend fun getSessions(limit: Int = 20, offset: Int = 0): SessionsResponse = get("/api/sessions?limit=$limit&offset=$offset")
     suspend fun getSessionMessages(sessionId: String): MessagesResponse = get("/api/sessions/$sessionId/messages")
     suspend fun getModelInfo(): ModelInfo = get("/api/model/info")
+    suspend fun getModelOptions(): ModelOptionsResponse = get("/api/model/options")
+
+    suspend fun setModel(assignment: ModelAssignment): ModelAssignment {
+        FileLogger.d("HermesApiService", "POST /api/model/set provider=${assignment.provider}, model=${assignment.model}")
+        return try {
+            val response = client.post("$baseUrl/api/model/set") {
+                header("X-Hermes-Session-Token", sessionToken)
+                contentType(ContentType.Application.Json)
+                setBody(assignment)
+            }
+            FileLogger.d("HermesApiService", "POST /api/model/set -> status=${response.status}")
+            response.body()
+        } catch (e: Exception) {
+            FileLogger.e("HermesApiService", "POST /api/model/set failed", e)
+            throw e
+        }
+    }
 
     suspend fun deleteSession(sessionId: String): Boolean =
         delete("/api/sessions/$sessionId")

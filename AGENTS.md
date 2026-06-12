@@ -75,17 +75,16 @@ data/
   remote/
     HermesWsClient.kt         # WebSocket JSON-RPC client (ConnectionState + SharedFlow of GatewayEvent)
     HermesApiService.kt       # REST API: sessions, messages, status, model info
-    HermesMethods.kt          # JSON-RPC method constants (session.create, prompt.submit, etc.)
-    HermesEventTypes.kt       # Gateway event type constants (message.delta, tool.*, approval.*, etc.)
+    HermesMethods.kt          # JSON-RPC method constants + HermesEventTypes object (message.delta, tool.*, approval.*, etc.)
     GatewayEvent.kt           # Data classes for all JSON-RPC event payloads
     JsonRpcProtocol.kt        # Generic JSON-RPC request/response/event data classes
   local/
-    AppDatabase.kt            # Room database — version 2, with MIGRATION_1_2
+    AppDatabase.kt            # Room database — version 3, with MIGRATION_1_2 and MIGRATION_2_3
     dao/
       MessageDao.kt           # CRUD for messages table (upsert, query by sessionId, delete)
       SentImageDao.kt         # Lookup local URI from server path for sent images
     entity/
-      MessageEntity.kt        # Messages: id, sessionId, role, content, reasoningText, toolCallsJson, etc.
+      MessageEntity.kt        # Messages: id, sessionId, role, content, reasoningText, parentId, toolCallsJson, etc.
       SentImageEntity.kt      # serverPath → localUri mapping for image-attach tracking
   repository/
     ConnectionRepository.kt   # Connection URL, token, state management
@@ -96,15 +95,16 @@ data/
     Session.kt
     ChatMessage.kt
     ConnectionConfig.kt
+    ConnectionProfile.kt
 service/
   HermesConnectionService.kt  # Foreground service — keeps WebSocket alive in background
 ui/
   theme/                      # DESIGN.md token system: Color.kt, Type.kt, Shape.kt, Spacing.kt, Theme.kt
-  components/                 # Reusable: SeinaButton, SeinaTextField, SnackbarHost, MessageBubble, Composer, ToolCallCard, dialogs, etc.
+  components/                 # Reusable: SeinaButton, SeinaTextField, SnackbarHost, MessageBubble, Composer, ToolCallCard, MarkdownText, ConnectionStatusBar, VerticalScrollbar, GlobalEventHandler, dialogs, etc.
   screens/
     connect/                  # ConnectScreen — enter Hermes URL + token
     chat/                     # ChatScreen — transcript + tool calls + typing indicator
-    sessions/                 # SessionListScreen — session list + delete
+    sessions/                 # SessionListScreen (Drawer in ChatScreen) — session list + delete; SessionListItem is a separate file
     settings/                 # SettingsScreen — theme, tools display, pagination, connection config, hidden/custom tools
   navigation/
     SeinaNavHost.kt           # Three routes: connect / chat / settings; phone-only (no split pane)
@@ -145,12 +145,12 @@ UI ← StateFlow<UiState> ← ViewModel ← Repository ← Flow<GatewayEvent>
 
 ### Room Persistence
 
-- `AppDatabase` (version 2) has two tables:
-  - **`messages`**: `MessageEntity` with id, sessionId, role, content, reasoningText, isReasoning, imageUrl, toolCallsJson, systemEventsJson, isStreaming, createdAt, updatedAt.
+- `AppDatabase` (version 3) has two tables:
+  - **`messages`**: `MessageEntity` with id, sessionId, role, content, reasoningText, parentId, isReasoning, imageUrl, toolCallsJson, systemEventsJson, isStreaming, createdAt, updatedAt.
   - **`sent_images`**: `SentImageEntity` mapping `serverPath → localUri` for image-attach dedup.
 - `ChatRepository` uses `MessageDao` for persisting and restoring chat history.
 - `SessionRepository` uses `SentImageDao` for re-attaching previously sent images.
-- Migration from v1→v2 creates the `messages` table. Always add migrations rather than `fallbackToDestructiveMigration()`.
+- Migration v1→v2 creates the `messages` table; v2→v3 adds `parentId` column. Always add migrations rather than `fallbackToDestructiveMigration()`.
 
 ### SettingsRepository (DataStore)
 
@@ -159,6 +159,7 @@ DataStore preference file: `seina_chan_prefs`. Keys include:
 - `themeMode` (string: "system" / "light" / "dark")
 - `ip`, `port`, `token` (strings — connection config)
 - `hidden_tool_names`, `custom_tools` (string sets — format `"category|tool_name"` for custom tools)
+- `connection_profiles` (JSON-serialized `List<ConnectionProfile>` — multi-profile support via `ConnectionProfile.kt` model)
 
 ---
 
@@ -189,7 +190,7 @@ Token system in `ui/theme/` maps `DESIGN.md` to Compose:
 - **No root-level pyproject.toml or package.json.** Python files in the root (`test_hermes_api.py`) are standalone test scripts for local Hermes API debugging.
 - **`hermes-agent/` is a git submodule** with its own remote. Do not edit it as part of Seina Chan development — reference it for the Gateway protocol.
 - **No network_security_config.xml hardening**: the `@xml/network_security_config` allows cleartext HTTP for local/LAN Hermes instances (`ws://` URLs). Do not ship this to production without review.
-- **No split-pane / tablet layout**: The app uses simple NavHost phone navigation. `AdaptivePane.kt` does not exist.
+- **No split-pane / tablet layout**: The app uses simple NavHost phone navigation. `androidx-adaptive-*` dependencies are declared in `build.gradle.kts` but not imported in any source file — the app is phone-only. Do not add split-pane layouts without explicit request.
 
 ---
 

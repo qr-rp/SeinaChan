@@ -1,12 +1,19 @@
 package com.seina.chan.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.seina.chan.ui.theme.AppShapes
 import com.seina.chan.ui.theme.CodeBg
 import com.seina.chan.ui.theme.CodeText
@@ -36,6 +44,10 @@ private sealed class MarkdownSegment {
     data class CodeBlock(val language: String, val code: String) : MarkdownSegment()
     data class Paragraph(val spans: List<InlineSpan>) : MarkdownSegment()
     data class Table(val headers: List<String>, val rows: List<List<String>>) : MarkdownSegment()
+    data class Heading(val level: Int, val text: String) : MarkdownSegment()
+    data class ListItem(val text: String, val ordered: Boolean, val number: Int) : MarkdownSegment()
+    data class Blockquote(val lines: List<String>) : MarkdownSegment()
+    data class TaskItem(val text: String, val checked: Boolean) : MarkdownSegment()
 }
 
 private sealed class InlineSpan {
@@ -58,11 +70,10 @@ private fun parseMarkdown(content: String): List<MarkdownSegment> {
     var lastIndex = 0
 
     codeBlockPattern.findAll(content).forEach { match ->
-        // 代码块之前的文本解析为段落（同时提取表格）
         if (match.range.first > lastIndex) {
             val textBefore = content.substring(lastIndex, match.range.first)
             if (textBefore.isNotBlank()) {
-                segments.addAll(parseTextWithTables(textBefore))
+                segments.addAll(parseBlocks(textBefore))
             }
         }
         val language = match.groupValues[1]
@@ -71,11 +82,10 @@ private fun parseMarkdown(content: String): List<MarkdownSegment> {
         lastIndex = match.range.last + 1
     }
 
-    // 剩余文本
     if (lastIndex < content.length) {
         val remaining = content.substring(lastIndex)
         if (remaining.isNotBlank()) {
-            segments.addAll(parseTextWithTables(remaining))
+            segments.addAll(parseBlocks(remaining))
         }
     }
 
@@ -90,78 +100,7 @@ private fun parseParagraphs(text: String): List<MarkdownSegment.Paragraph> {
         }
 }
 
-private fun parseInlineSpans(text: String): List<InlineSpan> {
-    val spans = mutableListOf<InlineSpan>()
-    var pos = 0
-    val plainBuffer = StringBuilder()
-
-    fun flushPlain() {
-        if (plainBuffer.isNotEmpty()) {
-            spans.add(InlineSpan.Plain(plainBuffer.toString()))
-            plainBuffer.clear()
-        }
-    }
-
-    while (pos < text.length) {
-        // 行内代码 `code`（优先级最高，内部不解析其他格式）
-        if (text[pos] == '`') {
-            flushPlain()
-            val end = text.indexOf('`', pos + 1)
-            if (end != -1) {
-                spans.add(InlineSpan.Code(text.substring(pos + 1, end)))
-                pos = end + 1
-            } else {
-                plainBuffer.append(text[pos])
-                pos++
-            }
-        }
-        // 粗体 **text**
-        else if (pos + 1 < text.length && text[pos] == '*' && text[pos + 1] == '*') {
-            flushPlain()
-            val end = text.indexOf("**", pos + 2)
-            if (end != -1) {
-                spans.add(InlineSpan.Bold(text.substring(pos + 2, end)))
-                pos = end + 2
-            } else {
-                plainBuffer.append(text[pos])
-                pos++
-            }
-        }
-        // 斜体 *text*
-        else if (text[pos] == '*') {
-            flushPlain()
-            val end = text.indexOf('*', pos + 1)
-            if (end != -1 && end != pos + 1) {
-                spans.add(InlineSpan.Italic(text.substring(pos + 1, end)))
-                pos = end + 1
-            } else {
-                plainBuffer.append(text[pos])
-                pos++
-            }
-        }
-        // 链接 [text](url)
-        else if (text[pos] == '[') {
-            val linkMatch = linkPattern.find(text, pos)
-            if (linkMatch != null && linkMatch.range.first == pos) {
-                flushPlain()
-                spans.add(InlineSpan.Link(linkMatch.groupValues[1], linkMatch.groupValues[2]))
-                pos = linkMatch.range.last + 1
-            } else {
-                plainBuffer.append(text[pos])
-                pos++
-            }
-        }
-        else {
-            plainBuffer.append(text[pos])
-            pos++
-        }
-    }
-
-    flushPlain()
-    return spans
-}
-
-private fun parseTextWithTables(text: String): List<MarkdownSegment> {
+private fun parseBlocks(text: String): List<MarkdownSegment> {
     val segments = mutableListOf<MarkdownSegment>()
     val lines = text.lines()
     var i = 0
@@ -178,27 +117,100 @@ private fun parseTextWithTables(text: String): List<MarkdownSegment> {
 
     while (i < lines.size) {
         val line = lines[i]
-        if (line.trimStart().startsWith("|") && line.trimEnd().endsWith("|")) {
-            val tableStart = i
-            var j = i + 1
-            while (j < lines.size) {
-                val candidate = lines[j]
-                if (candidate.trimStart().startsWith("|") && candidate.trimEnd().endsWith("|")) {
-                    j++
-                } else {
-                    break
-                }
+        val trimmed = line.trim()
+
+        if (trimmed.isNotEmpty()) {
+            // Heading
+            val headingMatch = Regex("""^(#{1,6})\s+(.*)$""").find(trimmed)
+            if (headingMatch != null) {
+                flushPlain(i)
+                val level = headingMatch.groupValues[1].length
+                val text = headingMatch.groupValues[2].trim()
+                segments.add(MarkdownSegment.Heading(level, text))
+                plainTextStart = i + 1
+                i++
+                continue
             }
-            val tableText = lines.subList(tableStart, j).joinToString("\n")
-            val table = parseTable(tableText)
-            if (table != null) {
-                flushPlain(tableStart)
-                segments.add(table)
+
+            // Blockquote
+            if (trimmed.startsWith("> ")) {
+                flushPlain(i)
+                val quoteLines = mutableListOf<String>()
+                var j = i
+                while (j < lines.size) {
+                    val l = lines[j].trimStart()
+                    if (l.startsWith("> ")) {
+                        quoteLines.add(l.substring(2))
+                        j++
+                    } else {
+                        break
+                    }
+                }
+                segments.add(MarkdownSegment.Blockquote(quoteLines))
                 plainTextStart = j
                 i = j
                 continue
             }
+
+            // Task item
+            val taskMatch = Regex("""^[-*]\s+\[([ xX])\]\s+(.*)$""").find(trimmed)
+            if (taskMatch != null) {
+                flushPlain(i)
+                val checked = taskMatch.groupValues[1].lowercase() == "x"
+                val text = taskMatch.groupValues[2]
+                segments.add(MarkdownSegment.TaskItem(text, checked))
+                plainTextStart = i + 1
+                i++
+                continue
+            }
+
+            // Unordered list item
+            val unorderedMatch = Regex("""^[-*]\s+(.*)$""").find(trimmed)
+            if (unorderedMatch != null) {
+                flushPlain(i)
+                val text = unorderedMatch.groupValues[1]
+                segments.add(MarkdownSegment.ListItem(text, ordered = false, number = 0))
+                plainTextStart = i + 1
+                i++
+                continue
+            }
+
+            // Ordered list item
+            val orderedMatch = Regex("""^(\d+)\.\s+(.*)$""").find(trimmed)
+            if (orderedMatch != null) {
+                flushPlain(i)
+                val number = orderedMatch.groupValues[1].toInt()
+                val text = orderedMatch.groupValues[2]
+                segments.add(MarkdownSegment.ListItem(text, ordered = true, number = number))
+                plainTextStart = i + 1
+                i++
+                continue
+            }
+
+            // Table
+            if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+                val tableStart = i
+                var j = i + 1
+                while (j < lines.size) {
+                    val candidate = lines[j].trim()
+                    if (candidate.startsWith("|") && candidate.endsWith("|")) {
+                        j++
+                    } else {
+                        break
+                    }
+                }
+                val tableText = lines.subList(tableStart, j).joinToString("\n")
+                val table = parseTable(tableText)
+                if (table != null) {
+                    flushPlain(tableStart)
+                    segments.add(table)
+                    plainTextStart = j
+                    i = j
+                    continue
+                }
+            }
         }
+
         i++
     }
 
@@ -226,6 +238,69 @@ private fun parseTableRow(line: String): List<String>? {
     return trimmed.substring(1, trimmed.length - 1)
         .split("|")
         .map { it.trim() }
+}
+
+private fun parseInlineSpans(text: String): List<InlineSpan> {
+    val spans = mutableListOf<InlineSpan>()
+    var pos = 0
+    val plainBuffer = StringBuilder()
+
+    fun flushPlain() {
+        if (plainBuffer.isNotEmpty()) {
+            spans.add(InlineSpan.Plain(plainBuffer.toString()))
+            plainBuffer.clear()
+        }
+    }
+
+    while (pos < text.length) {
+        if (text[pos] == '`') {
+            flushPlain()
+            val end = text.indexOf('`', pos + 1)
+            if (end != -1) {
+                spans.add(InlineSpan.Code(text.substring(pos + 1, end)))
+                pos = end + 1
+            } else {
+                plainBuffer.append(text[pos])
+                pos++
+            }
+        } else if (pos + 1 < text.length && text[pos] == '*' && text[pos + 1] == '*') {
+            flushPlain()
+            val end = text.indexOf("**", pos + 2)
+            if (end != -1) {
+                spans.add(InlineSpan.Bold(text.substring(pos + 2, end)))
+                pos = end + 2
+            } else {
+                plainBuffer.append(text[pos])
+                pos++
+            }
+        } else if (text[pos] == '*') {
+            flushPlain()
+            val end = text.indexOf('*', pos + 1)
+            if (end != -1 && end != pos + 1) {
+                spans.add(InlineSpan.Italic(text.substring(pos + 1, end)))
+                pos = end + 1
+            } else {
+                plainBuffer.append(text[pos])
+                pos++
+            }
+        } else if (text[pos] == '[') {
+            val linkMatch = linkPattern.find(text, pos)
+            if (linkMatch != null && linkMatch.range.first == pos) {
+                flushPlain()
+                spans.add(InlineSpan.Link(linkMatch.groupValues[1], linkMatch.groupValues[2]))
+                pos = linkMatch.range.last + 1
+            } else {
+                plainBuffer.append(text[pos])
+                pos++
+            }
+        } else {
+            plainBuffer.append(text[pos])
+            pos++
+        }
+    }
+
+    flushPlain()
+    return spans
 }
 
 // === 渲染组件 ===
@@ -256,7 +331,6 @@ private object CodeHighlighter {
                 val remaining = code.substring(pos)
                 var matched = false
 
-                // Strings first (they can contain // or /* */)
                 if (!matched && (code[pos] == '"' || code[pos] == '\'' || code[pos] == '`')) {
                     val quote = code[pos]
                     var i = pos + 1
@@ -277,7 +351,6 @@ private object CodeHighlighter {
                     matched = true
                 }
 
-                // Block comment /* */
                 if (!matched && remaining.startsWith("/*")) {
                     val end = code.indexOf("*/", pos + 2)
                     if (end != -1) {
@@ -294,7 +367,6 @@ private object CodeHighlighter {
                     matched = true
                 }
 
-                // Line comment //
                 if (!matched && remaining.startsWith("//")) {
                     val end = code.indexOf('\n', pos)
                     if (end != -1) {
@@ -311,7 +383,6 @@ private object CodeHighlighter {
                     matched = true
                 }
 
-                // Numbers
                 if (!matched) {
                     val numMatch = numberPattern.find(remaining)
                     if (numMatch != null && numMatch.range.first == 0) {
@@ -323,7 +394,6 @@ private object CodeHighlighter {
                     }
                 }
 
-                // Keywords
                 if (!matched) {
                     val kwMatch = keywordPattern.find(remaining)
                     if (kwMatch != null && kwMatch.range.first == 0) {
@@ -351,6 +421,11 @@ private object CodeHighlighter {
  * - 粗体（**text**）
  * - 斜体（*text*）
  * - 链接（[text](url)）：下划线 + 主题色
+ * - 表格（| a | b |）
+ * - 标题（# H1 - ###### H6）
+ * - 无序/有序列表（- / * / 1.）
+ * - 引用块（>）
+ * - 任务列表（- [ ] / - [x]）
  */
 @Composable
 fun MarkdownText(
@@ -362,7 +437,6 @@ fun MarkdownText(
     val segments = remember(content) { parseMarkdown(content) }
 
     if (segments.isEmpty()) {
-        // 解析结果为空时回退为纯文本
         Text(text = content, style = style, color = color, modifier = modifier)
         return
     }
@@ -380,6 +454,10 @@ fun MarkdownText(
                     )
                 }
                 is MarkdownSegment.Table -> TableView(segment)
+                is MarkdownSegment.Heading -> HeadingView(segment)
+                is MarkdownSegment.ListItem -> ListView(segment)
+                is MarkdownSegment.Blockquote -> BlockquoteView(segment)
+                is MarkdownSegment.TaskItem -> TaskListView(segment)
             }
         }
     }
@@ -418,7 +496,7 @@ private fun CodeBlockView(codeBlock: MarkdownSegment.CodeBlock) {
 
 @Composable
 private fun TableView(table: MarkdownSegment.Table) {
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .background(
@@ -427,54 +505,139 @@ private fun TableView(table: MarkdownSegment.Table) {
             )
             .padding(8.dp)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Header row
-            Row(modifier = Modifier.fillMaxWidth()) {
-                table.headers.forEach { header ->
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = header,
-                            style = TextStyles.bodyMd.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            Divider(
-                thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
-            // Data rows
-            table.rows.forEachIndexed { index, row ->
+        val columnCount = table.headers.size
+        val minTableWidth = (columnCount * 80).dp
+        val tableWidth = maxWidth.coerceAtLeast(minTableWidth)
+
+        Box(
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            Column(modifier = Modifier.width(tableWidth)) {
+                // Header row
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    row.forEach { cell ->
+                    table.headers.forEach { header ->
                         Box(
                             modifier = Modifier
                                 .weight(1f)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = cell,
-                                style = TextStyles.bodyMd,
-                                color = MaterialTheme.colorScheme.onSurface
+                                text = header,
+                                style = TextStyles.bodyMd.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
-                if (index < table.rows.size - 1) {
-                    Divider(
-                        thickness = 0.5.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant
-                    )
+                Divider(
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+                // Data rows
+                table.rows.forEachIndexed { index, row ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        row.forEach { cell ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = cell,
+                                    style = TextStyles.bodyMd,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                    if (index < table.rows.size - 1) {
+                        Divider(
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun HeadingView(heading: MarkdownSegment.Heading) {
+    val fontSize = when (heading.level) {
+        1 -> 28.sp
+        2 -> 24.sp
+        3 -> 20.sp
+        4 -> 18.sp
+        5 -> 16.sp
+        else -> 14.sp
+    }
+    Text(
+        text = heading.text,
+        fontSize = fontSize,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(vertical = 8.dp),
+        color = MaterialTheme.colorScheme.onBackground
+    )
+}
+
+@Composable
+private fun ListView(listItem: MarkdownSegment.ListItem) {
+    val prefix = if (listItem.ordered) {
+        "${listItem.number}. "
+    } else {
+        "• "
+    }
+    Text(
+        text = prefix + listItem.text,
+        style = TextStyles.bodyMd,
+        modifier = Modifier
+            .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+        color = MaterialTheme.colorScheme.onBackground
+    )
+}
+
+@Composable
+private fun BlockquoteView(blockquote: MarkdownSegment.Blockquote) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(Primary)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(12.dp)
+        ) {
+            blockquote.lines.forEach { line ->
+                Text(
+                    text = line,
+                    style = TextStyles.bodyMd,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskListView(taskItem: MarkdownSegment.TaskItem) {
+    val prefix = if (taskItem.checked) "☑ " else "☐ "
+    Text(
+        text = prefix + taskItem.text,
+        style = TextStyles.bodyMd,
+        modifier = Modifier
+            .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+        color = MaterialTheme.colorScheme.onBackground
+    )
 }
 
 private fun buildInlineAnnotatedString(spans: List<InlineSpan>, baseColor: Color): AnnotatedString {
@@ -494,7 +657,6 @@ private fun buildInlineAnnotatedString(spans: List<InlineSpan>, baseColor: Color
                         background = baseColor.copy(alpha = 0.12f),
                     )
                 ) {
-                    // 用细空格模拟内边距
                     append("\u2009${span.text}\u2009")
                 }
                 is InlineSpan.Link -> {

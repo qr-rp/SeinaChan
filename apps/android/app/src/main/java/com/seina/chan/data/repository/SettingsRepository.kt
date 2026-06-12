@@ -30,6 +30,8 @@ class SettingsRepository(
     val hiddenToolNames: Flow<Set<String>> = dataStore.data.map { it[HIDDEN_TOOL_NAMES_KEY] ?: emptySet() }
     /** 自定义工具链，格式为 "category|tool_name" 的 Set */
     val customTools: Flow<Set<String>> = dataStore.data.map { it[CUSTOM_TOOLS_KEY] ?: emptySet() }
+    /** 用户选择的模型，格式为 "provider/model" */
+    val selectedModel: Flow<String> = dataStore.data.map { it[SELECTED_MODEL_KEY] ?: "" }
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -126,6 +128,12 @@ class SettingsRepository(
         }
     }
 
+    suspend fun setSelectedModel(value: String) {
+        dataStore.edit { prefs ->
+            prefs[SELECTED_MODEL_KEY] = value
+        }
+    }
+
     suspend fun saveConnectionProfiles(profiles: List<ConnectionProfile>) {
         dataStore.edit { prefs ->
             prefs[CONNECTION_PROFILES_KEY] = encodeProfiles(profiles)
@@ -166,5 +174,6 @@ class SettingsRepository(
         private val HIDDEN_TOOL_NAMES_KEY = stringSetPreferencesKey("hidden_tool_names")
         private val CUSTOM_TOOLS_KEY = stringSetPreferencesKey("custom_tools")
         private val CONNECTION_PROFILES_KEY = stringPreferencesKey("connection_profiles")
+        private val SELECTED_MODEL_KEY = stringPreferencesKey("selected_model")
     }
 }
