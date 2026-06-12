@@ -17,7 +17,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
@@ -48,6 +50,7 @@ import coil.compose.AsyncImage
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.seina.chan.data.remote.GatewayEvent
+import com.seina.chan.ui.components.SeinaTextField
 import com.seina.chan.ui.components.VerticalScrollbar
 import com.seina.chan.ui.components.dialogs.ApprovalDialog
 import com.seina.chan.util.FileLogger
@@ -253,27 +256,70 @@ fun ChatScreen(
                     .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                    Icon(
-                        imageVector = Icons.Default.Menu,
-                        contentDescription = "菜单",
-                        tint = MaterialTheme.colorScheme.onBackground
+                if (!uiState.isSearchMode) {
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "菜单",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = title,
+                        style = TextStyles.bodyMd,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        textAlign = TextAlign.Center
                     )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = title,
-                    style = TextStyles.bodyMd,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = onNavigateToSettings) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "设置",
-                        tint = MaterialTheme.colorScheme.onBackground
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(onClick = { viewModel.toggleSearchMode() }) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "搜索",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "设置",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                } else {
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "菜单",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    SeinaTextField(
+                        value = uiState.searchQuery,
+                        onValueChange = { viewModel.onSearchQueryChange(it) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = Spacing.sm),
+                        placeholder = "搜索消息...",
+                        singleLine = true
                     )
+                    Text(
+                        text = "只看我",
+                        style = TextStyles.bodySm.copy(
+                            color = if (uiState.searchFilterUserOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (uiState.searchFilterUserOnly) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal
+                        ),
+                        modifier = Modifier
+                            .clickable { viewModel.toggleSearchFilterUserOnly() }
+                            .padding(horizontal = Spacing.xs)
+                    )
+                    IconButton(onClick = { viewModel.clearSearch() }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "关闭搜索",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
                 }
             }
 
@@ -292,6 +338,12 @@ fun ChatScreen(
                             text = uiState.error ?: "",
                             style = TextStyles.bodyMd,
                             color = MaterialTheme.colorScheme.primary
+                        )
+                    } else if (uiState.isSearchMode) {
+                        Text(
+                            text = "未找到匹配消息",
+                            style = TextStyles.bodyMd,
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     } else {
                         Text(

@@ -66,6 +66,7 @@ class ChatViewModel @Inject constructor(
                         FileLogger.i("ChatViewModel", "Auto-resume after reconnect succeeded, sid=$sid")
                     } catch (e: Exception) {
                         FileLogger.w("ChatViewModel", "Auto-resume after reconnect failed: ${e.message}")
+                        currentWsSessionId = ""
                     }
                 }
                 previousState = state
@@ -81,6 +82,7 @@ class ChatViewModel @Inject constructor(
                     FileLogger.i("ChatViewModel", "Immediate resume after recreation succeeded, sid=$sid")
                 } catch (e: Exception) {
                     FileLogger.w("ChatViewModel", "Immediate resume after recreation failed: ${e.message}")
+                    currentWsSessionId = ""
                 }
             }
         }
@@ -105,8 +107,13 @@ class ChatViewModel @Inject constructor(
         _inputState,
         chatRepository.messages
     ) { inputState, messages ->
+        val filtered = messages.filter { msg ->
+            val matchesQuery = inputState.searchQuery.isBlank() || msg.content.contains(inputState.searchQuery, ignoreCase = true)
+            val matchesRole = !inputState.searchFilterUserOnly || msg.role == "user"
+            matchesQuery && matchesRole
+        }
         inputState.copy(
-            messages = messages,
+            messages = filtered,
             canSend = (inputState.currentInput.isNotBlank() || inputState.selectedImages.isNotEmpty() || inputState.selectedVideo != null || inputState.selectedFiles.isNotEmpty()) && !inputState.isLoading
         )
     }.stateIn(
@@ -125,6 +132,22 @@ class ChatViewModel @Inject constructor(
 
     fun clearQuote() {
         _inputState.update { it.copy(quotedMessage = null) }
+    }
+
+    fun toggleSearchMode() {
+        _inputState.update { it.copy(isSearchMode = !it.isSearchMode) }
+    }
+
+    fun onSearchQueryChange(query: String) {
+        _inputState.update { it.copy(searchQuery = query) }
+    }
+
+    fun toggleSearchFilterUserOnly() {
+        _inputState.update { it.copy(searchFilterUserOnly = !it.searchFilterUserOnly) }
+    }
+
+    fun clearSearch() {
+        _inputState.update { it.copy(isSearchMode = false, searchQuery = "", searchFilterUserOnly = false) }
     }
 
     fun resendMessage(content: String) {
@@ -200,7 +223,10 @@ class ChatViewModel @Inject constructor(
                         currentWsSessionId = sid
                         FileLogger.i("ChatViewModel", "sendMessage() resumeSession succeeded, sid=$sid")
                     } catch (e: Exception) {
-                        FileLogger.w("ChatViewModel", "sendMessage() resumeSession failed, continuing: ${e.message}")
+                        FileLogger.w("ChatViewModel", "sendMessage() resumeSession failed, will recreate session: ${e.message}")
+                        currentDbSessionId = ""
+                        currentWsSessionId = ""
+                        ensureSession()
                     }
                 }
                 if (video != null) {
@@ -318,7 +344,10 @@ class ChatViewModel @Inject constructor(
                         currentWsSessionId = sid
                         FileLogger.i("ChatViewModel", "sendImage() resumeSession succeeded, sid=$sid")
                     } catch (e: Exception) {
-                        FileLogger.w("ChatViewModel", "sendImage() resumeSession failed, continuing: ${e.message}")
+                        FileLogger.w("ChatViewModel", "sendImage() resumeSession failed, will recreate session: ${e.message}")
+                        currentDbSessionId = ""
+                        currentWsSessionId = ""
+                        ensureSession()
                     }
                 }
                 chatRepository.sendImage(uri, context.contentResolver, currentWsSessionId)
@@ -338,6 +367,7 @@ class ChatViewModel @Inject constructor(
             return
         }
         currentDbSessionId = dbSessionId
+        currentWsSessionId = ""
         viewModelScope.launch {
             try {
                 connectionRepository.saveLastDbSessionId(currentDbSessionId)

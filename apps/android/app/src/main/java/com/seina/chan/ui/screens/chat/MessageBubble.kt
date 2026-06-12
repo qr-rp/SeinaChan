@@ -5,7 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,11 +22,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,12 +39,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.seina.chan.data.model.ChatMessage
@@ -92,7 +100,10 @@ fun MessageBubble(
 
             // 消息气泡
             var showMenu by remember { mutableStateOf(false) }
+            var pressOffset by remember { mutableStateOf(Offset.Zero) }
+            var showSelectionDialog by remember { mutableStateOf(false) }
             val clipboardManager = LocalClipboardManager.current
+            val density = LocalDensity.current
             Box(
                 modifier = Modifier
                     .background(
@@ -101,7 +112,10 @@ fun MessageBubble(
                     )
                     .padding(12.dp)
                     .pointerInput(Unit) {
-                        detectTapGestures(onLongPress = { showMenu = true })
+                        detectTapGestures(onLongPress = { offset ->
+                            pressOffset = offset
+                            showMenu = true
+                        })
                     }
             ) {
                 if (message.isStreaming && message.content.isEmpty() && message.imageUrl == null) {
@@ -142,46 +156,85 @@ fun MessageBubble(
                             }
                         }
                     }
-                    SelectionContainer {
-                        contentColumn()
-                    }
+                    contentColumn()
                 }
                 DropdownMenu(
                     expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
+                    onDismissRequest = { showMenu = false },
+                    offset = with(density) {
+                        DpOffset(pressOffset.x.toDp(), pressOffset.y.toDp())
+                    }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("复制文字") },
+                        text = { Text("复制") },
                         onClick = {
                             clipboardManager.setText(AnnotatedString(message.content))
                             showMenu = false
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("复制 Markdown") },
+                        text = { Text("全选") },
                         onClick = {
                             clipboardManager.setText(AnnotatedString(message.content))
                             showMenu = false
                         }
                     )
-                    if (onQuote != null) {
-                        DropdownMenuItem(
-                            text = { Text("引用回复") },
-                            onClick = {
-                                onQuote(message)
-                                showMenu = false
+                    DropdownMenuItem(
+                        text = { Text("选择") },
+                        onClick = {
+                            showMenu = false
+                            showSelectionDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("引用回复") },
+                        enabled = onQuote != null,
+                        onClick = {
+                            onQuote?.invoke(message)
+                            showMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("重新发送") },
+                        enabled = isUser && onResend != null,
+                        onClick = {
+                            onResend?.invoke(message.content)
+                            showMenu = false
+                        }
+                    )
+                }
+
+                if (showSelectionDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showSelectionDialog = false },
+                        title = { Text("选择文字") },
+                        text = {
+                            Box(
+                                modifier = Modifier
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                SelectionContainer {
+                                    if (isUser) {
+                                        Text(
+                                            text = message.content,
+                                            style = TextStyles.bodyMd
+                                        )
+                                    } else {
+                                        MarkdownText(
+                                            content = message.content,
+                                            style = TextStyles.bodyMd,
+                                            color = MaterialTheme.colorScheme.onBackground
+                                        )
+                                    }
+                                }
                             }
-                        )
-                    }
-                    if (isUser && onResend != null) {
-                        DropdownMenuItem(
-                            text = { Text("重新发送") },
-                            onClick = {
-                                onResend(message.content)
-                                showMenu = false
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showSelectionDialog = false }) {
+                                Text("关闭")
                             }
-                        )
-                    }
+                        }
+                    )
                 }
             }
 

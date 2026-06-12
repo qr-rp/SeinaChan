@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +35,7 @@ import com.seina.chan.ui.theme.TextStyles
 private sealed class MarkdownSegment {
     data class CodeBlock(val language: String, val code: String) : MarkdownSegment()
     data class Paragraph(val spans: List<InlineSpan>) : MarkdownSegment()
+    data class Table(val headers: List<String>, val rows: List<List<String>>) : MarkdownSegment()
 }
 
 private sealed class InlineSpan {
@@ -55,11 +58,11 @@ private fun parseMarkdown(content: String): List<MarkdownSegment> {
     var lastIndex = 0
 
     codeBlockPattern.findAll(content).forEach { match ->
-        // 代码块之前的文本解析为段落
+        // 代码块之前的文本解析为段落（同时提取表格）
         if (match.range.first > lastIndex) {
             val textBefore = content.substring(lastIndex, match.range.first)
             if (textBefore.isNotBlank()) {
-                segments.addAll(parseParagraphs(textBefore))
+                segments.addAll(parseTextWithTables(textBefore))
             }
         }
         val language = match.groupValues[1]
@@ -72,7 +75,7 @@ private fun parseMarkdown(content: String): List<MarkdownSegment> {
     if (lastIndex < content.length) {
         val remaining = content.substring(lastIndex)
         if (remaining.isNotBlank()) {
-            segments.addAll(parseParagraphs(remaining))
+            segments.addAll(parseTextWithTables(remaining))
         }
     }
 
@@ -156,6 +159,73 @@ private fun parseInlineSpans(text: String): List<InlineSpan> {
 
     flushPlain()
     return spans
+}
+
+private fun parseTextWithTables(text: String): List<MarkdownSegment> {
+    val segments = mutableListOf<MarkdownSegment>()
+    val lines = text.lines()
+    var i = 0
+    var plainTextStart = 0
+
+    fun flushPlain(endLine: Int) {
+        if (plainTextStart < endLine) {
+            val plainText = lines.subList(plainTextStart, endLine).joinToString("\n")
+            if (plainText.isNotBlank()) {
+                segments.addAll(parseParagraphs(plainText))
+            }
+        }
+    }
+
+    while (i < lines.size) {
+        val line = lines[i]
+        if (line.trimStart().startsWith("|") && line.trimEnd().endsWith("|")) {
+            val tableStart = i
+            var j = i + 1
+            while (j < lines.size) {
+                val candidate = lines[j]
+                if (candidate.trimStart().startsWith("|") && candidate.trimEnd().endsWith("|")) {
+                    j++
+                } else {
+                    break
+                }
+            }
+            val tableText = lines.subList(tableStart, j).joinToString("\n")
+            val table = parseTable(tableText)
+            if (table != null) {
+                flushPlain(tableStart)
+                segments.add(table)
+                plainTextStart = j
+                i = j
+                continue
+            }
+        }
+        i++
+    }
+
+    flushPlain(lines.size)
+    return segments
+}
+
+private fun parseTable(text: String): MarkdownSegment.Table? {
+    val lines = text.lines()
+    if (lines.size < 3) return null
+
+    val separatorPattern = Regex("""\|\s*[-:]+\s*(\|\s*[-:]+\s*)*\|""")
+    if (!separatorPattern.matches(lines[1].trim())) return null
+
+    val headers = parseTableRow(lines[0]) ?: return null
+    val rows = lines.subList(2, lines.size).mapNotNull { parseTableRow(it) }
+    if (rows.isEmpty()) return null
+
+    return MarkdownSegment.Table(headers = headers, rows = rows)
+}
+
+private fun parseTableRow(line: String): List<String>? {
+    val trimmed = line.trim()
+    if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) return null
+    return trimmed.substring(1, trimmed.length - 1)
+        .split("|")
+        .map { it.trim() }
 }
 
 // === 渲染组件 ===
@@ -309,6 +379,7 @@ fun MarkdownText(
                         color = color
                     )
                 }
+                is MarkdownSegment.Table -> TableView(segment)
             }
         }
     }
@@ -341,6 +412,67 @@ private fun CodeBlockView(codeBlock: MarkdownSegment.CodeBlock) {
                 style = TextStyles.code,
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+@Composable
+private fun TableView(table: MarkdownSegment.Table) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                shape = AppShapes.md
+            )
+            .padding(8.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Header row
+            Row(modifier = Modifier.fillMaxWidth()) {
+                table.headers.forEach { header ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = header,
+                            style = TextStyles.bodyMd.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            Divider(
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+            // Data rows
+            table.rows.forEachIndexed { index, row ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    row.forEach { cell ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = cell,
+                                style = TextStyles.bodyMd,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+                if (index < table.rows.size - 1) {
+                    Divider(
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                }
+            }
         }
     }
 }

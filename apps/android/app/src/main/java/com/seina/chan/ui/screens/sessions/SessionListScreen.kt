@@ -36,8 +36,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.seina.chan.data.model.Session
+import com.seina.chan.ui.components.GlobalEventViewModel
 import com.seina.chan.data.remote.ConnectionState
 import com.seina.chan.ui.components.ConnectionStatus
 import com.seina.chan.ui.components.ConnectionStatusBar
@@ -62,6 +64,8 @@ fun SessionListScreen(
     val sessions by viewModel.filteredSessions.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val connectionState by viewModel.connectionState.collectAsStateWithLifecycle()
+    val globalEventViewModel = hiltViewModel<GlobalEventViewModel>()
+    val stableConnectionState by globalEventViewModel.stableConnectionState.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isLoadingMore by viewModel.isLoadingMore.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
@@ -111,23 +115,24 @@ fun SessionListScreen(
             }
     }
 
-    val connectionStatus = when (connectionState) {
+    val connectionStatus = when (stableConnectionState) {
         is ConnectionState.Idle -> ConnectionStatus.Disconnected("未连接")
         is ConnectionState.Connecting -> ConnectionStatus.Connecting
         is ConnectionState.Open -> ConnectionStatus.Connected
         is ConnectionState.Closed -> ConnectionStatus.Disconnected("未连接")
-        is ConnectionState.Error -> ConnectionStatus.Disconnected((connectionState as ConnectionState.Error).reason)
+        is ConnectionState.Error -> ConnectionStatus.Disconnected((stableConnectionState as ConnectionState.Error).reason)
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(vertical = Spacing.md, horizontal = Spacing.sm)
+            .padding(bottom = Spacing.md, horizontal = Spacing.sm)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(56.dp)
                 .padding(horizontal = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween

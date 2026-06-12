@@ -68,6 +68,7 @@ class ChatRepository(
                     FileLogger.i("ChatRepository", "Auto-resume succeeded for session=$currentSessionId")
                 } catch (e: Exception) {
                     FileLogger.e("ChatRepository", "Auto-resume failed for session=$currentSessionId", e)
+                    currentSessionId = null
                 }
             }
         }.launchIn(scope)

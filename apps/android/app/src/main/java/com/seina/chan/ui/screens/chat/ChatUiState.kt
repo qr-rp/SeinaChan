@@ -15,5 +15,8 @@ data class ChatUiState(
     val showToolCalls: Boolean = true,
     val showReasoning: Boolean = true,
     val hiddenToolNames: Set<String> = emptySet(),
-    val quotedMessage: ChatMessage? = null
+    val quotedMessage: ChatMessage? = null,
+    val isSearchMode: Boolean = false,
+    val searchQuery: String = "",
+    val searchFilterUserOnly: Boolean = false
 )

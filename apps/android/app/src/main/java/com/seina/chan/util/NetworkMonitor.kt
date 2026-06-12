@@ -6,9 +6,16 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -21,6 +28,12 @@ class NetworkMonitor @Inject constructor(
 
     private val _networkAvailable = MutableStateFlow(isCurrentlyAvailable())
     val networkAvailable: StateFlow<Boolean> = _networkAvailable.asStateFlow()
+
+    private val _networkAvailableDebounced = MutableStateFlow(isCurrentlyAvailable())
+    val networkAvailableDebounced: StateFlow<Boolean> = _networkAvailableDebounced.asStateFlow()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var debounceJob: Job? = null
 
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -42,6 +55,16 @@ class NetworkMonitor @Inject constructor(
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
         connectivityManager.registerNetworkCallback(request, callback)
+
+        scope.launch {
+            _networkAvailable.collect { available ->
+                debounceJob?.cancel()
+                debounceJob = launch {
+                    delay(500)
+                    _networkAvailableDebounced.value = available
+                }
+            }
+        }
     }
 
     private fun isCurrentlyAvailable(): Boolean {
@@ -55,5 +78,6 @@ class NetworkMonitor @Inject constructor(
             connectivityManager.unregisterNetworkCallback(callback)
         } catch (_: Exception) {
         }
+        scope.cancel()
     }
 }

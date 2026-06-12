@@ -59,7 +59,7 @@ class HermesWsClient(
         private const val DEFAULT_TIMEOUT = 60_000L
 
         /** 心跳检查间隔 */
-        private const val HEARTBEAT_CHECK_INTERVAL_MS = 30_000L
+        private const val HEARTBEAT_CHECK_INTERVAL_MS = 15_000L
         /** 最大重连延迟：5 分钟 */
         private const val MAX_RECONNECT_DELAY_MS = 300_000L
     }
@@ -87,9 +87,9 @@ class HermesWsClient(
     private var lastFrameTime = 0L
     private var heartbeatWatchJob: Job? = null
 
-    private var currentHeartbeatTimeoutMs = 25_000L
-    private val baseHeartbeatTimeoutMs = 25_000L
-    private val longRunningHeartbeatTimeoutMs = 90_000L
+    private var currentHeartbeatTimeoutMs = 45_000L
+    private val baseHeartbeatTimeoutMs = 45_000L
+    private val longRunningHeartbeatTimeoutMs = 120_000L
 
     fun setLongRunningMode(enabled: Boolean) {
         currentHeartbeatTimeoutMs = if (enabled) longRunningHeartbeatTimeoutMs else baseHeartbeatTimeoutMs
@@ -107,7 +107,7 @@ class HermesWsClient(
 
         // 网络状态监控
         scope.launch {
-            networkMonitor.networkAvailable.collect { available ->
+            networkMonitor.networkAvailableDebounced.collect { available ->
                 if (available) {
                     // 网络恢复，如果当前断开则立即重连
                     val currentState = _state.value
