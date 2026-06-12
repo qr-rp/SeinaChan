@@ -201,35 +201,32 @@ class SessionRepository(
         var cleanedContent = content
 
         regex.findAll(content).forEach { match ->
-            val serverPath = match.groupValues.getOrNull(1)?.ifBlank {
-                pathRegex.find(match.value)?.groupValues?.get(1)
-            }?.trim() ?: ""
-
-            if (serverPath.isNotEmpty()) {
-                val normalizedPath = serverPath.substring(serverPath.lastIndexOf(".hermes/images/"))
-                val localUri = sentImageDao.getUriByServerPath(normalizedPath)
-                if (localUri != null) {
-                    localUris.add(localUri)
-                    cleanedContent = cleanedContent.replace(match.value, "")
-                } else {
-                    cleanedContent = cleanedContent.replace(match.value, "📷 图片")
-                }
-            } else {
-                val fallbackPath = pathRegex.find(match.value)?.groupValues?.get(1) ?: ""
-                if (fallbackPath.isNotEmpty()) {
-                    val normalizedPath = fallbackPath.substring(fallbackPath.lastIndexOf(".hermes/images/"))
+            // 从匹配块中提取所有图片路径（支持 image_urls: ["/a", "/b"] 这种单块多路径）
+            val paths = pathRegex.findAll(match.value).map { it.groupValues[1] }.toList()
+            if (paths.isNotEmpty()) {
+                var hasLocalUri = false
+                paths.forEach { serverPath ->
+                    val normalizedPath = serverPath.substring(serverPath.lastIndexOf(".hermes/images/"))
                     val localUri = sentImageDao.getUriByServerPath(normalizedPath)
                     if (localUri != null) {
                         localUris.add(localUri)
-                        cleanedContent = cleanedContent.replace(match.value, "")
-                    } else {
-                        cleanedContent = cleanedContent.replace(match.value, "📷 图片")
+                        hasLocalUri = true
                     }
                 }
+                cleanedContent = if (hasLocalUri) {
+                    cleanedContent.replace(match.value, "")
+                } else {
+                    cleanedContent.replace(match.value, "📷 图片")
+                }
+            } else {
+                cleanedContent = cleanedContent.replace(match.value, "📷 图片")
             }
         }
 
-        return Pair(cleanedContent.trim(), localUris)
+        val trimmed = cleanedContent.trim()
+        // 如果清理后只剩无意义的标点/空白符号，直接置空
+        val meaningful = if (localUris.isNotEmpty() && trimmed.matches(Regex("""^[\p{P}\s]+$"""))) "" else trimmed
+        return Pair(meaningful, localUris)
     }
 
     suspend fun createSession(): CreateSessionResult {
