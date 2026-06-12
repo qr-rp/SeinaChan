@@ -547,12 +547,14 @@ class ChatRepository(
 
     /**
      * 将当前所有消息持久化到 Room（用于 setMessages 等批量场景）
+     * 会先清空该会话已有缓存，避免服务器返回的消息结构与本地不一致时产生残留。
      */
     private fun persistMessages() {
         val sid = currentSessionId ?: return
         val msgs = _messages.value
         scope.launch {
             try {
+                messageDao.deleteBySessionId(sid)
                 messageDao.upsertAll(msgs.map { it.toEntity(sid) })
             } catch (e: Exception) {
                 FileLogger.e("ChatRepository", "批量持久化消息失败", e)

@@ -71,14 +71,14 @@ class SessionRepository(
         }
 
         // 解析消息（排除 tool 角色，其结果已提取到 toolResults）
-        val parsed = raw.filter { it.role != "tool" }.map { dto ->
+        val parsed = raw.filter { it.role != "tool" }.flatMap { dto ->
             val content = when (dto.content) {
                 is JsonPrimitive -> dto.content.content
                 null -> ""
                 else -> ""
             }
             val reasoningText = dto.reasoning ?: dto.reasoningContent ?: ""
-            val (displayContent, imageUrl) = parseImageContent(content)
+            val (displayContent, imageUrls) = parseImageContent(content)
 
             // 解析 toolCalls 并尝试关联 tool 结果
             val toolCalls = parseToolCalls(dto.toolCalls).map { call ->
@@ -90,16 +90,34 @@ class SessionRepository(
                 }
             }
 
-            ChatMessage(
-                id = dto.id.toString(),
-                role = dto.role,
-                content = displayContent,
-                isStreaming = false,
-                reasoningText = reasoningText,
-                isReasoning = false,
-                toolCalls = toolCalls,
-                imageUrl = imageUrl
-            )
+            if (imageUrls.size > 1 && dto.role == "user") {
+                // 单条消息包含多张图片时拆分为多条，确保每条只带一张图
+                imageUrls.mapIndexed { index, url ->
+                    ChatMessage(
+                        id = "${dto.id}_img_$index",
+                        role = dto.role,
+                        content = if (index == 0) displayContent else "",
+                        isStreaming = false,
+                        reasoningText = reasoningText,
+                        isReasoning = false,
+                        toolCalls = if (index == 0) toolCalls else emptyList(),
+                        imageUrl = url
+                    )
+                }
+            } else {
+                listOf(
+                    ChatMessage(
+                        id = dto.id.toString(),
+                        role = dto.role,
+                        content = displayContent,
+                        isStreaming = false,
+                        reasoningText = reasoningText,
+                        isReasoning = false,
+                        toolCalls = toolCalls,
+                        imageUrl = imageUrls.firstOrNull()
+                    )
+                )
+            }
         }
 
         // 合并相邻的 assistant 消息（服务端可能将 reasoning/toolCall/content 拆成多条）
@@ -171,25 +189,47 @@ class SessionRepository(
      *   [User sent an image at: /path]
      *   任何包含 .hermes/images/ 路径的文本
      * 有缓存则返回空内容 + imageUrl；无缓存则替换为 📷 图片 占位符。
+     * 支持单条消息中包含多张图片，返回所有匹配的本地 URI 列表。
      */
-    private suspend fun parseImageContent(content: String): Pair<String, String?> {
+    private suspend fun parseImageContent(content: String): Pair<String, List<String>> {
+        if (content.isBlank()) return Pair(content, emptyList())
+
         val regex = Regex("""\[[^\]]*\.hermes/images/[^\]\s"]+[^\]]*\]|(?:image_url[s]?:\s*\[?"?|sent an image at:\s*)(/[^\]\s"]*\.hermes/images/[^\]\s"]+)""")
-        val match = regex.find(content)
-        if (match != null) {
-            val serverPath = match.groupValues[1].ifBlank {
-                Regex("""(/[^\]\s"]*\.hermes/images/[^\]\s"]+)""").find(match.value)?.groupValues?.get(1) ?: ""
-            }.trim()
-            if (serverPath.isEmpty()) return Pair(content, null)
-            // 标准化路径：只保留 .hermes/images/ 及之后部分，确保与 sendImage 存入的路径一致
-            val normalizedPath = serverPath.substring(serverPath.lastIndexOf(".hermes/images/"))
-            val localUri = sentImageDao.getUriByServerPath(normalizedPath)
-            return if (localUri != null) {
-                Pair(content.replace(regex, "").trim(), localUri)
+        val pathRegex = Regex("""(/[^\]\s"]*\.hermes/images/[^\]\s"]+)""")
+
+        val localUris = mutableListOf<String>()
+        var cleanedContent = content
+
+        regex.findAll(content).forEach { match ->
+            val serverPath = match.groupValues.getOrNull(1)?.ifBlank {
+                pathRegex.find(match.value)?.groupValues?.get(1)
+            }?.trim() ?: ""
+
+            if (serverPath.isNotEmpty()) {
+                val normalizedPath = serverPath.substring(serverPath.lastIndexOf(".hermes/images/"))
+                val localUri = sentImageDao.getUriByServerPath(normalizedPath)
+                if (localUri != null) {
+                    localUris.add(localUri)
+                    cleanedContent = cleanedContent.replace(match.value, "")
+                } else {
+                    cleanedContent = cleanedContent.replace(match.value, "📷 图片")
+                }
             } else {
-                Pair(content.replace(regex, "📷 图片").trim(), null)
+                val fallbackPath = pathRegex.find(match.value)?.groupValues?.get(1) ?: ""
+                if (fallbackPath.isNotEmpty()) {
+                    val normalizedPath = fallbackPath.substring(fallbackPath.lastIndexOf(".hermes/images/"))
+                    val localUri = sentImageDao.getUriByServerPath(normalizedPath)
+                    if (localUri != null) {
+                        localUris.add(localUri)
+                        cleanedContent = cleanedContent.replace(match.value, "")
+                    } else {
+                        cleanedContent = cleanedContent.replace(match.value, "📷 图片")
+                    }
+                }
             }
         }
-        return Pair(content, null)
+
+        return Pair(cleanedContent.trim(), localUris)
     }
 
     suspend fun createSession(): CreateSessionResult {
