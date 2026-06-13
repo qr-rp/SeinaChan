@@ -13,7 +13,8 @@ data class ChatMessage(
     val toolCalls: List<ToolCallDetail> = emptyList(),
     val imageUrl: String? = null,
     val systemEvents: List<String> = emptyList(),
-    val parentId: String? = null
+    val parentId: String? = null,
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 @Serializable

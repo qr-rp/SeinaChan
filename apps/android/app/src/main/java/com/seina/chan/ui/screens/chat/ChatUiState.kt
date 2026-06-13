@@ -14,6 +14,7 @@ data class ChatUiState(
     val selectedFiles: List<Uri> = emptyList(),
     val showToolCalls: Boolean = true,
     val showReasoning: Boolean = true,
+    val showTimestamps: Boolean = false,
     val hiddenToolNames: Set<String> = emptySet(),
     val quotedMessage: ChatMessage? = null,
     val isSearchMode: Boolean = false,

@@ -101,6 +101,11 @@ class ChatViewModel @Inject constructor(
                 _inputState.update { it.copy(hiddenToolNames = value) }
             }
         }
+        viewModelScope.launch {
+            settingsRepository.showTimestamps.collect { value ->
+                _inputState.update { it.copy(showTimestamps = value) }
+            }
+        }
     }
 
     val uiState: StateFlow<ChatUiState> = combine(

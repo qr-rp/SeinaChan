@@ -583,11 +583,7 @@ class ChatRepository(
                 systemEvents
             ),
             isStreaming = isStreaming,
-            createdAt = try {
-                id.toLong()
-            } catch (_: NumberFormatException) {
-                System.currentTimeMillis()
-            },
+            createdAt = createdAt,
             updatedAt = System.currentTimeMillis(),
             parentId = parentId
         )
@@ -625,7 +621,8 @@ class ChatRepository(
             toolCalls = toolCalls,
             imageUrl = imageUrl,
             systemEvents = systemEvents,
-            parentId = parentId
+            parentId = parentId,
+            createdAt = createdAt
         )
     }
 

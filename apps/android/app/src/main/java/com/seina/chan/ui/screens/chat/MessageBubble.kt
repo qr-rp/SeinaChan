@@ -54,12 +54,16 @@ import com.seina.chan.data.model.ChatMessage
 import com.seina.chan.ui.components.MarkdownText
 import com.seina.chan.ui.theme.AppShapes
 import com.seina.chan.ui.theme.TextStyles
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun MessageBubble(
     message: ChatMessage,
     showToolCalls: Boolean = true,
     showReasoning: Boolean = true,
+    showTimestamps: Boolean = false,
     hiddenToolNames: Set<String> = emptySet(),
     onImageClick: ((String) -> Unit)? = null,
     onQuote: ((ChatMessage) -> Unit)? = null,
@@ -238,6 +242,16 @@ fun MessageBubble(
                 }
             }
 
+            // 时间戳
+            if (showTimestamps && message.createdAt > 0) {
+                Text(
+                    text = formatTimestamp(message.createdAt),
+                    style = TextStyles.label,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 2.dp)
+                )
+            }
+
             // 系统事件（如 Memory updated / Skill created 等）
             if (message.systemEvents.isNotEmpty()) {
                 Column(
@@ -255,6 +269,11 @@ fun MessageBubble(
             }
         }
     }
+}
+
+private fun formatTimestamp(timestamp: Long): String {
+    val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+    return sdf.format(Date(timestamp))
 }
 
 @Composable

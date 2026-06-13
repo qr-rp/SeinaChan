@@ -70,8 +70,13 @@ class SessionRepository(
             (dto.toolCallId ?: dto.id.toString()) to resultText
         }
 
+        // 基于消息 id 生成递增时间戳，避免所有历史消息时间戳相同
+        val nonToolRaw = raw.filter { it.role != "tool" }
+        val maxId = nonToolRaw.maxOfOrNull { it.id } ?: 0
+        val baseTime = System.currentTimeMillis()
+
         // 解析消息（排除 tool 角色，其结果已提取到 toolResults）
-        val parsed = raw.filter { it.role != "tool" }.flatMap { dto ->
+        val parsed = nonToolRaw.flatMap { dto ->
             val content = when (dto.content) {
                 is JsonPrimitive -> dto.content.content
                 null -> ""
@@ -79,6 +84,7 @@ class SessionRepository(
             }
             val reasoningText = dto.reasoning ?: dto.reasoningContent ?: ""
             val (displayContent, imageUrls) = parseImageContent(content)
+            val createdAt = baseTime - (maxId - dto.id) * 1000
 
             // 解析 toolCalls 并尝试关联 tool 结果
             val toolCalls = parseToolCalls(dto.toolCalls).map { call ->
@@ -101,7 +107,8 @@ class SessionRepository(
                         reasoningText = reasoningText,
                         isReasoning = false,
                         toolCalls = if (index == 0) toolCalls else emptyList(),
-                        imageUrl = url
+                        imageUrl = url,
+                        createdAt = createdAt + index
                     )
                 }
             } else {
@@ -114,7 +121,8 @@ class SessionRepository(
                         reasoningText = reasoningText,
                         isReasoning = false,
                         toolCalls = toolCalls,
-                        imageUrl = imageUrls.firstOrNull()
+                        imageUrl = imageUrls.firstOrNull(),
+                        createdAt = createdAt
                     )
                 )
             }

@@ -371,6 +371,7 @@ fun ChatScreen(
                                 message = message,
                                 showToolCalls = uiState.showToolCalls,
                                 showReasoning = uiState.showReasoning,
+                                showTimestamps = uiState.showTimestamps,
                                 hiddenToolNames = uiState.hiddenToolNames,
                                 onImageClick = { previewImageUri = it },
                                 onQuote = { viewModel.quoteMessage(it) },
