@@ -57,7 +57,6 @@ object AppModule {
         }
         engine {
             requestTimeout = 60_000
-            connectionTimeout = 30_000
         }
     }
 
