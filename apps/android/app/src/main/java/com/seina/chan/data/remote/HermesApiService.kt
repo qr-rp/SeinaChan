@@ -52,7 +52,8 @@ data class MessageDto(
     @SerialName("tool_calls") val toolCalls: JsonElement? = null,
     val reasoning: String? = null,
     @SerialName("reasoning_content") val reasoningContent: String? = null,
-    @SerialName("tool_call_id") val toolCallId: String? = null
+    @SerialName("tool_call_id") val toolCallId: String? = null,
+    val timestamp: Double? = null
 )
 
 @Serializable

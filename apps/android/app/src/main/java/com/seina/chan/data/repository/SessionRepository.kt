@@ -70,12 +70,8 @@ class SessionRepository(
             (dto.toolCallId ?: dto.id.toString()) to resultText
         }
 
-        // 基于消息 id 生成递增时间戳，避免所有历史消息时间戳相同
-        val nonToolRaw = raw.filter { it.role != "tool" }
-        val maxId = nonToolRaw.maxOfOrNull { it.id } ?: 0
-        val baseTime = System.currentTimeMillis()
-
         // 解析消息（排除 tool 角色，其结果已提取到 toolResults）
+        val nonToolRaw = raw.filter { it.role != "tool" }
         val parsed = nonToolRaw.flatMap { dto ->
             val content = when (dto.content) {
                 is JsonPrimitive -> dto.content.content
@@ -84,7 +80,12 @@ class SessionRepository(
             }
             val reasoningText = dto.reasoning ?: dto.reasoningContent ?: ""
             val (displayContent, imageUrls) = parseImageContent(content)
-            val createdAt = baseTime - (maxId - dto.id) * 1000
+            // 优先使用服务端返回的 timestamp（Unix 秒转毫秒），无则回退到基于 id 的递增时间
+            val createdAt = dto.timestamp?.let { (it * 1000).toLong() }
+                ?: run {
+                    val maxId = nonToolRaw.maxOfOrNull { it.id } ?: 0
+                    System.currentTimeMillis() - (maxId - dto.id) * 1000
+                }
 
             // 解析 toolCalls 并尝试关联 tool 结果
             val toolCalls = parseToolCalls(dto.toolCalls).map { call ->
