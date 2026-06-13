@@ -16,18 +16,48 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            // Priority: environment vars (CI) > keystore.properties (local)
+            val envStoreFile = System.getenv("KEYSTORE_PATH")
+            val envStorePassword = System.getenv("KEYSTORE_PASSWORD")
+            val envKeyAlias = System.getenv("KEY_ALIAS")
+            val envKeyPassword = System.getenv("KEY_PASSWORD")
+
+            if (envStoreFile != null) {
+                // CI build: all config from environment
+                storeFile = file(envStoreFile)
+                storePassword = envStorePassword
+                keyAlias = envKeyAlias
+                keyPassword = envKeyPassword
+            } else {
+                // Local build: read from keystore.properties
+                val props = java.util.Properties()
+                val propsFile = rootProject.file("keystore.properties")
+                if (propsFile.exists()) {
+                    props.load(propsFile.inputStream())
+                    storeFile = file(props["storeFile"]?.toString() ?: "")
+                    storePassword = props["storePassword"]?.toString()
+                    keyAlias = props["keyAlias"]?.toString()
+                    keyPassword = props["keyPassword"]?.toString()
+                }
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

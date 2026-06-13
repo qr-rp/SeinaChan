@@ -12,6 +12,9 @@ build/
 local.properties
 proguard/
 *.log
+*.jks
+*.keystore
+keystore.properties
 
 # Python
 __pycache__/

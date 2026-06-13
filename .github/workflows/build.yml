@@ -1,0 +1,119 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-changelog:
+    runs-on: ubuntu-latest
+    outputs:
+      release_body: ${{ steps.changelog.outputs.body }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | sed -n '2p')
+          CURRENT_TAG=${{ github.ref_name }}
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          echo "Generating changelog from ${PREV_TAG:-initial commit} to ${CURRENT_TAG}"
+
+          BODY="## ${CURRENT_TAG}\n\n"
+
+          FEAT=$(git log ${RANGE} --format="- %s" --grep="^feat")
+          FIX=$(git log ${RANGE} --format="- %s" --grep="^fix")
+          REFACTOR=$(git log ${RANGE} --format="- %s" --grep="^refactor")
+          DOCS=$(git log ${RANGE} --format="- %s" --grep="^docs")
+          TEST=$(git log ${RANGE} --format="- %s" --grep="^test")
+          CHORE=$(git log ${RANGE} --format="- %s" --grep="^chore")
+          OTHER=$(git log ${RANGE} --format="- %s" --grep="^feat" --invert-grep --grep="^fix" --invert-grep --grep="^refactor" --invert-grep --grep="^docs" --invert-grep --grep="^test" --invert-grep --grep="^chore" --invert-grep)
+
+          if [ -n "$FEAT" ]; then BODY="${BODY}### ✨ 新功能\n${FEAT}\n\n"; fi
+          if [ -n "$FIX" ]; then BODY="${BODY}### 🐛 修复\n${FIX}\n\n"; fi
+          if [ -n "$REFACTOR" ]; then BODY="${BODY}### ♻️ 重构\n${REFACTOR}\n\n"; fi
+          if [ -n "$DOCS" ]; then BODY="${BODY}### 📝 文档\n${DOCS}\n\n"; fi
+          if [ -n "$TEST" ]; then BODY="${BODY}### 🧪 测试\n${TEST}\n\n"; fi
+          if [ -n "$CHORE" ]; then BODY="${BODY}### 🔧 构建/工具\n${CHORE}\n\n"; fi
+          if [ -n "$OTHER" ]; then BODY="${BODY}### 📦 其他\n${OTHER}\n\n"; fi
+
+          BODY="${BODY}---\n**完整提交记录**: [${PREV_TAG:-initial}...${CURRENT_TAG}](https://github.com/${{ github.repository }}/compare/${PREV_TAG:-${CURRENT_TAG}}...${CURRENT_TAG})"
+
+          {
+            echo "body<<EOF"
+            echo -e "${BODY}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: generate-changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle/libs.versions.toml', '**/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+        working-directory: apps/android
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+        working-directory: apps/android
+        env:
+          KEYSTORE_PATH: app/keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload APK as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeinaChan-${{ github.ref_name }}
+          path: apps/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Create Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 口袋星奈 ${{ github.ref_name }}
+          body: ${{ needs.generate-changelog.outputs.release_body }}
+          draft: true
+          files: apps/android/app/build/outputs/apk/release/*.apk
