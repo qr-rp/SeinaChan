@@ -31,7 +31,6 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
-import kotlin.time.Duration.Companion.seconds
 import javax.inject.Singleton
 
 @Module
@@ -51,17 +50,14 @@ object AppModule {
         install(ContentNegotiation) {
             json(json)
         }
-        install(WebSockets) {
-            pingInterval = 20.seconds
-        }
+        install(WebSockets)
         install(Logging) {
             logger = Logger.ANDROID
             level = LogLevel.ALL
         }
         engine {
-            requestTimeout = 30.seconds
-            connectTimeout = 30.seconds
-            socketTimeout = 30.seconds
+            requestTimeout = 60_000
+            connectionTimeout = 30_000
         }
     }
 
