@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -15,8 +17,8 @@ android {
         applicationId = "com.seina.chan"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -37,7 +39,7 @@ android {
                 keyPassword = envKeyPassword
             } else {
                 // Local build: read from keystore.properties
-                val props = java.util.Properties()
+                val props = Properties()
                 val propsFile = rootProject.file("keystore.properties")
                 if (propsFile.exists()) {
                     props.load(propsFile.inputStream())
